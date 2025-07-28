@@ -1,0 +1,72 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Run both frontend and backend in development mode
+    cmd: concurrently "task client:dev" "task server:dev"
+
+  client:dev:
+    desc: Run React frontend in development mode
+    dir: client
+    cmd: npm start
+
+  server:dev:
+    desc: Run NestJS backend in development mode
+    dir: server
+    cmd: npm run start:dev
+
+  install:
+    desc: Install all dependencies
+    cmds:
+      - npm install
+      - task client:install
+      - task server:install
+
+  client:install:
+    desc: Install frontend dependencies
+    dir: client
+    cmd: npm install
+
+  server:install:
+    desc: Install backend dependencies
+    dir: server
+    cmd: npm install
+
+  build:
+    desc: Build both frontend and backend
+    cmds:
+      - task client:build
+      - task server:build
+
+  client:build:
+    desc: Build React frontend for production
+    dir: client
+    cmd: npm run build
+
+  server:build:
+    desc: Build NestJS backend for production
+    dir: server
+    cmd: npm run build
+
+  test:
+    desc: Run tests for both frontend and backend
+    cmds:
+      - task client:test
+      - task server:test
+
+  client:test:
+    desc: Run React frontend tests
+    dir: client
+    cmd: npm test
+
+  server:test:
+    desc: Run NestJS backend tests
+    dir: server
+    cmd: npm test
+
+  clean:
+    desc: Clean build artifacts and node_modules
+    cmds:
+      - rm -rf client/build client/node_modules
+      - rm -rf server/dist server/node_modules
+      - rm -rf node_modules
