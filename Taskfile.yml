@@ -70,3 +70,27 @@ tasks:
       - rm -rf client/build client/node_modules
       - rm -rf server/dist server/node_modules
       - rm -rf node_modules
+
+  up-mongodb:
+    desc: Start MongoDB in Docker container and follow logs
+    cmd: |
+      docker run --rm \
+        --name mongodb \
+        -p 27017:27017 \
+        -v mongodb_data:/data/db \
+        mongo:7.0
+    ignore_error: true
+
+  down-mongodb:
+    desc: Stop and remove MongoDB Docker container
+    cmds:
+      - docker stop mongodb || true
+      - docker rm mongodb || true
+
+  mongodb-logs:
+    desc: Show MongoDB container logs
+    cmd: docker logs -f mongodb
+
+  mongodb-shell:
+    desc: Connect to MongoDB shell
+    cmd: docker exec -it mongodb mongosh
