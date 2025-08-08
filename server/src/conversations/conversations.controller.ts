@@ -51,6 +51,15 @@ export class ConversationsController {
     return { success: true };
   }
 
+  @Put('trees/:treeId')
+  updateTree(@Param('treeId') treeId: string, @Body() updateData: { position?: { x: number; y: number } }) {
+    const tree = this.conversationsService.updateTree(treeId, updateData);
+    if (!tree) {
+      throw new HttpException('Conversation tree not found', HttpStatus.NOT_FOUND);
+    }
+    return tree;
+  }
+
   @Post('trees/:treeId/nodes')
   addNode(@Param('treeId') treeId: string, @Body() createNodeDto: CreateNodeDto) {
     const node = this.conversationsService.addNode(treeId, createNodeDto);

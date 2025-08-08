@@ -67,6 +67,20 @@ export class ConversationsService {
     return false;
   }
 
+  updateTree(treeId: string, updateData: { position?: { x: number; y: number } }): ConversationTree | null {
+    const tree = this.getConversationTree(treeId);
+    if (!tree) return null;
+
+    if (updateData.position !== undefined) {
+      tree.position = updateData.position;
+    }
+
+    tree.updatedAt = new Date();
+    this.canvas.updatedAt = new Date();
+
+    return tree;
+  }
+
   addNode(treeId: string, createNodeDto: CreateNodeDto): ConversationNode | null {
     const tree = this.getConversationTree(treeId);
     if (!tree) return null;

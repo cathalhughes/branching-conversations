@@ -130,6 +130,12 @@ const Canvas = observer(() => {
           node.id,
           node.position
         );
+      } else if (node.type === 'treeHeaderNode') {
+        const nodeData = node.data as any as TreeHeaderNodeData;
+        conversationStore.updateTreePosition(
+          nodeData.tree.id,
+          node.position
+        );
       }
     },
     [conversationStore]
