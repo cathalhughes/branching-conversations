@@ -145,8 +145,12 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
             </div>
           </form>
         ) : (
-          <div className="text-sm text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">
-            {node.prompt}
+          <div 
+            className="text-sm text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap cursor-pointer hover:bg-gray-100 transition-colors"
+            onClick={startEditing}
+            title="Click to edit this prompt"
+          >
+            {node.prompt || "Click to edit this prompt"}
           </div>
         )}
       </div>
