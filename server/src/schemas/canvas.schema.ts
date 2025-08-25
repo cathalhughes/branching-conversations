@@ -1,6 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema, Types } from 'mongoose';
-import { CanvasDocument, UserReference, ActivityInfo, Position } from './conversation-mongo.types';
+import {
+  CanvasDocument,
+  UserReference,
+  ActivityInfo,
+  Position,
+} from './conversation-mongo.types';
 
 // Sub-schemas
 @Schema({ _id: false })
@@ -69,11 +74,11 @@ export class Activity {
   currentEditors: UserReference[];
 }
 
-@Schema({ 
+@Schema({
   timestamps: true,
   collection: 'canvases',
   toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toObject: { virtuals: true },
 })
 export class Canvas {
   _id: Types.ObjectId;
@@ -152,10 +157,14 @@ CanvasSchema.index({ 'activity.isBeingEdited': 1 });
 
 // Compound indexes
 CanvasSchema.index({ ownerId: 1, lastActivityAt: -1, isDeleted: 1 });
-CanvasSchema.index({ 'collaborators.userId': 1, lastActivityAt: -1, isDeleted: 1 });
+CanvasSchema.index({
+  'collaborators.userId': 1,
+  lastActivityAt: -1,
+  isDeleted: 1,
+});
 
 // Pre-save middleware to update version for optimistic locking
-CanvasSchema.pre('findOneAndUpdate', function() {
+CanvasSchema.pre('findOneAndUpdate', function () {
   const update = this.getUpdate() as any;
   if (update) {
     update.$inc = { ...update.$inc, version: 1 };
@@ -164,7 +173,7 @@ CanvasSchema.pre('findOneAndUpdate', function() {
 });
 
 // Pre-save middleware for new documents
-CanvasSchema.pre('save', function(next) {
+CanvasSchema.pre('save', function (next) {
   if (this.isNew) {
     this.version = 1;
   } else {
@@ -174,7 +183,7 @@ CanvasSchema.pre('save', function(next) {
 });
 
 // Soft delete methods
-CanvasSchema.methods.softDelete = function(deletedBy: Types.ObjectId) {
+CanvasSchema.methods.softDelete = function (deletedBy: Types.ObjectId) {
   this.isDeleted = true;
   this.deletedAt = new Date();
   this.deletedBy = deletedBy;
@@ -182,7 +191,7 @@ CanvasSchema.methods.softDelete = function(deletedBy: Types.ObjectId) {
   return this.save();
 };
 
-CanvasSchema.methods.restore = function() {
+CanvasSchema.methods.restore = function () {
   this.isDeleted = false;
   this.deletedAt = undefined;
   this.deletedBy = undefined;
@@ -191,7 +200,10 @@ CanvasSchema.methods.restore = function() {
 };
 
 // Static methods for common queries
-CanvasSchema.statics.findByOwner = function(ownerId: Types.ObjectId, includeDeleted = false) {
+CanvasSchema.statics.findByOwner = function (
+  ownerId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = { ownerId };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -199,12 +211,12 @@ CanvasSchema.statics.findByOwner = function(ownerId: Types.ObjectId, includeDele
   return this.find(filter).sort({ lastActivityAt: -1 });
 };
 
-CanvasSchema.statics.findByCollaborator = function(userId: Types.ObjectId, includeDeleted = false) {
+CanvasSchema.statics.findByCollaborator = function (
+  userId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = {
-    $or: [
-      { ownerId: userId },
-      { 'collaborators.userId': userId }
-    ]
+    $or: [{ ownerId: userId }, { 'collaborators.userId': userId }],
   };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -212,7 +224,7 @@ CanvasSchema.statics.findByCollaborator = function(userId: Types.ObjectId, inclu
   return this.find(filter).sort({ lastActivityAt: -1 });
 };
 
-CanvasSchema.statics.findPublic = function(includeDeleted = false) {
+CanvasSchema.statics.findPublic = function (includeDeleted = false) {
   const filter: any = { isPublic: true };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -221,22 +233,22 @@ CanvasSchema.statics.findPublic = function(includeDeleted = false) {
 };
 
 // Virtual for checking if user has access
-CanvasSchema.virtual('userAccess').get(function(userId: Types.ObjectId) {
+CanvasSchema.virtual('userAccess').get(function (userId: Types.ObjectId) {
   if (!userId) return null;
-  
+
   if (this.ownerId.equals(userId)) {
     return { role: 'owner', permissions: 'admin' };
   }
-  
-  const collaborator = this.collaborators.find(c => c.userId.equals(userId));
+
+  const collaborator = this.collaborators.find((c) => c.userId.equals(userId));
   if (collaborator) {
     return { role: 'collaborator', permissions: collaborator.permissions };
   }
-  
+
   if (this.isPublic) {
     return { role: 'public', permissions: 'read' };
   }
-  
+
   return null;
 });
 

@@ -1,6 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema, Types } from 'mongoose';
-import { ConversationNodeDocument, UserReference, ActivityInfo, Position } from './conversation-mongo.types';
+import {
+  ConversationNodeDocument,
+  UserReference,
+  ActivityInfo,
+  Position,
+} from './conversation-mongo.types';
 
 @Schema({ _id: false })
 export class NodePosition {
@@ -38,11 +43,11 @@ export class Activity {
   currentEditors: UserReference[];
 }
 
-@Schema({ 
+@Schema({
   timestamps: true,
   collection: 'conversation_nodes',
   toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toObject: { virtuals: true },
 })
 export class ConversationNode {
   _id: Types.ObjectId;
@@ -121,7 +126,8 @@ export class ConversationNode {
   updatedAt: Date;
 }
 
-export const ConversationNodeSchema = SchemaFactory.createForClass(ConversationNode);
+export const ConversationNodeSchema =
+  SchemaFactory.createForClass(ConversationNode);
 
 // Indexes for performance
 ConversationNodeSchema.index({ conversationId: 1, isDeleted: 1 });
@@ -134,29 +140,42 @@ ConversationNodeSchema.index({ createdAt: -1 });
 ConversationNodeSchema.index({ depth: 1, branchIndex: 1 });
 
 // Compound indexes for tree traversal
-ConversationNodeSchema.index({ conversationId: 1, parentId: 1, branchIndex: 1, isDeleted: 1 });
+ConversationNodeSchema.index({
+  conversationId: 1,
+  parentId: 1,
+  branchIndex: 1,
+  isDeleted: 1,
+});
 ConversationNodeSchema.index({ conversationId: 1, depth: 1, isDeleted: 1 });
-ConversationNodeSchema.index({ canvasId: 1, conversationId: 1, createdAt: -1, isDeleted: 1 });
-
-// Text search index for prompt and response
-ConversationNodeSchema.index({ 
-  prompt: 'text', 
-  response: 'text' 
-}, {
-  weights: { prompt: 10, response: 5 }
+ConversationNodeSchema.index({
+  canvasId: 1,
+  conversationId: 1,
+  createdAt: -1,
+  isDeleted: 1,
 });
 
+// Text search index for prompt and response
+ConversationNodeSchema.index(
+  {
+    prompt: 'text',
+    response: 'text',
+  },
+  {
+    weights: { prompt: 10, response: 5 },
+  },
+);
+
 // Geospatial index for position-based queries (finding nearby nodes)
-ConversationNodeSchema.index({ 
-  'position.x': 1, 
-  'position.y': 1 
+ConversationNodeSchema.index({
+  'position.x': 1,
+  'position.y': 1,
 });
 
 // Pre-save middleware for optimistic locking and tree management
-ConversationNodeSchema.pre('save', function(next) {
+ConversationNodeSchema.pre('save', function (next) {
   if (this.isNew) {
     this.version = 1;
-    
+
     // Generate unique ReactFlow ID if not provided
     if (!this.reactFlowId) {
       this.reactFlowId = `node-${this._id.toString()}`;
@@ -164,13 +183,13 @@ ConversationNodeSchema.pre('save', function(next) {
   } else {
     this.version = (this.version || 1) + 1;
   }
-  
+
   // Update activity timestamp
   this.activity.lastEditedAt = new Date();
   next();
 });
 
-ConversationNodeSchema.pre('findOneAndUpdate', function() {
+ConversationNodeSchema.pre('findOneAndUpdate', function () {
   const update = this.getUpdate() as any;
   if (update && !update.$setOnInsert) {
     update.$inc = { ...update.$inc, version: 1 };
@@ -185,7 +204,10 @@ ConversationNodeSchema.pre('findOneAndUpdate', function() {
 // Instance methods are handled in the service layer to avoid TypeScript complexity
 
 // Static methods
-ConversationNodeSchema.statics.findByConversation = function(conversationId: Types.ObjectId, includeDeleted = false) {
+ConversationNodeSchema.statics.findByConversation = function (
+  conversationId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = { conversationId };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -193,7 +215,10 @@ ConversationNodeSchema.statics.findByConversation = function(conversationId: Typ
   return this.find(filter).sort({ depth: 1, branchIndex: 1 });
 };
 
-ConversationNodeSchema.statics.findChildren = function(parentId: Types.ObjectId, includeDeleted = false) {
+ConversationNodeSchema.statics.findChildren = function (
+  parentId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = { parentId };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -201,7 +226,10 @@ ConversationNodeSchema.statics.findChildren = function(parentId: Types.ObjectId,
   return this.find(filter).sort({ branchIndex: 1 });
 };
 
-ConversationNodeSchema.statics.findByCanvas = function(canvasId: Types.ObjectId, includeDeleted = false) {
+ConversationNodeSchema.statics.findByCanvas = function (
+  canvasId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = { canvasId };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -209,39 +237,46 @@ ConversationNodeSchema.statics.findByCanvas = function(canvasId: Types.ObjectId,
   return this.find(filter).sort({ createdAt: -1 });
 };
 
-ConversationNodeSchema.statics.findRoot = function(conversationId: Types.ObjectId) {
-  return this.findOne({ 
-    conversationId, 
+ConversationNodeSchema.statics.findRoot = function (
+  conversationId: Types.ObjectId,
+) {
+  return this.findOne({
+    conversationId,
     parentId: { $exists: false },
-    isDeleted: { $ne: true }
+    isDeleted: { $ne: true },
   });
 };
 
 // getConversationPath method moved to service layer
 
-ConversationNodeSchema.statics.searchInCanvas = function(canvasId: Types.ObjectId, searchText: string, includeDeleted = false) {
-  const filter: any = { 
+ConversationNodeSchema.statics.searchInCanvas = function (
+  canvasId: Types.ObjectId,
+  searchText: string,
+  includeDeleted = false,
+) {
+  const filter: any = {
     canvasId,
-    $text: { $search: searchText }
+    $text: { $search: searchText },
   };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
   }
-  return this.find(filter, { score: { $meta: 'textScore' } })
-    .sort({ score: { $meta: 'textScore' } });
+  return this.find(filter, { score: { $meta: 'textScore' } }).sort({
+    score: { $meta: 'textScore' },
+  });
 };
 
-ConversationNodeSchema.statics.findNearby = function(
-  canvasId: Types.ObjectId, 
-  centerX: number, 
-  centerY: number, 
+ConversationNodeSchema.statics.findNearby = function (
+  canvasId: Types.ObjectId,
+  centerX: number,
+  centerY: number,
   radius: number,
-  includeDeleted = false
+  includeDeleted = false,
 ) {
-  const filter: any = { 
+  const filter: any = {
     canvasId,
     'position.x': { $gte: centerX - radius, $lte: centerX + radius },
-    'position.y': { $gte: centerY - radius, $lte: centerY + radius }
+    'position.y': { $gte: centerY - radius, $lte: centerY + radius },
   };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -250,12 +285,12 @@ ConversationNodeSchema.statics.findNearby = function(
 };
 
 // Virtual for checking if node is root
-ConversationNodeSchema.virtual('isRoot').get(function() {
+ConversationNodeSchema.virtual('isRoot').get(function () {
   return !this.parentId;
 });
 
 // Virtual for checking if node is leaf
-ConversationNodeSchema.virtual('isLeaf').get(function() {
+ConversationNodeSchema.virtual('isLeaf').get(function () {
   return this.childCount === 0;
 });
 

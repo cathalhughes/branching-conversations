@@ -1,6 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema, Types } from 'mongoose';
-import { ConversationDocument, UserReference, ActivityInfo, Position } from './conversation-mongo.types';
+import {
+  ConversationDocument,
+  UserReference,
+  ActivityInfo,
+  Position,
+} from './conversation-mongo.types';
 
 @Schema({ _id: false })
 export class ConversationPosition {
@@ -38,11 +43,11 @@ export class Activity {
   currentEditors: UserReference[];
 }
 
-@Schema({ 
+@Schema({
   timestamps: true,
   collection: 'conversations',
   toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toObject: { virtuals: true },
 })
 export class Conversation {
   _id: Types.ObjectId;
@@ -127,24 +132,31 @@ ConversationSchema.index({ 'activity.isBeingEdited': 1 });
 ConversationSchema.index({ 'activity.lastEditedAt': -1 });
 
 // Compound indexes
-ConversationSchema.index({ canvasId: 1, 'activity.lastEditedAt': -1, isDeleted: 1 });
+ConversationSchema.index({
+  canvasId: 1,
+  'activity.lastEditedAt': -1,
+  isDeleted: 1,
+});
 ConversationSchema.index({ canvasId: 1, nodeCount: -1, isDeleted: 1 });
 
 // Text search index for name and description
-ConversationSchema.index({ 
-  name: 'text', 
-  description: 'text' 
-}, {
-  weights: { name: 10, description: 5 }
-});
+ConversationSchema.index(
+  {
+    name: 'text',
+    description: 'text',
+  },
+  {
+    weights: { name: 10, description: 5 },
+  },
+);
 
 // Pre-save middleware for optimistic locking
-ConversationSchema.pre('findOneAndUpdate', function() {
+ConversationSchema.pre('findOneAndUpdate', function () {
   const update = this.getUpdate() as any;
   if (update && !update.$setOnInsert) {
     update.$inc = { ...update.$inc, version: 1 };
     update.updatedAt = new Date();
-    
+
     // Update activity timestamp
     if (!update['activity.lastEditedAt']) {
       update['activity.lastEditedAt'] = new Date();
@@ -152,20 +164,20 @@ ConversationSchema.pre('findOneAndUpdate', function() {
   }
 });
 
-ConversationSchema.pre('save', function(next) {
+ConversationSchema.pre('save', function (next) {
   if (this.isNew) {
     this.version = 1;
   } else {
     this.version = (this.version || 1) + 1;
   }
-  
+
   // Update activity timestamp
   this.activity.lastEditedAt = new Date();
   next();
 });
 
 // Methods
-ConversationSchema.methods.softDelete = function(deletedBy: Types.ObjectId) {
+ConversationSchema.methods.softDelete = function (deletedBy: Types.ObjectId) {
   this.isDeleted = true;
   this.deletedAt = new Date();
   this.deletedBy = deletedBy;
@@ -173,7 +185,7 @@ ConversationSchema.methods.softDelete = function(deletedBy: Types.ObjectId) {
   return this.save();
 };
 
-ConversationSchema.methods.restore = function() {
+ConversationSchema.methods.restore = function () {
   this.isDeleted = false;
   this.deletedAt = undefined;
   this.deletedBy = undefined;
@@ -181,8 +193,10 @@ ConversationSchema.methods.restore = function() {
   return this.save();
 };
 
-ConversationSchema.methods.addParticipant = function(user: UserReference) {
-  const existingParticipant = this.participants.find(p => p.id.equals(user.id));
+ConversationSchema.methods.addParticipant = function (user: UserReference) {
+  const existingParticipant = this.participants.find((p) =>
+    p.id.equals(user.id),
+  );
   if (!existingParticipant) {
     this.participants.push(user);
     this.version += 1;
@@ -191,7 +205,11 @@ ConversationSchema.methods.addParticipant = function(user: UserReference) {
   return Promise.resolve(this);
 };
 
-ConversationSchema.methods.updateStats = function(nodeCount: number, maxDepth: number, totalTokens?: number) {
+ConversationSchema.methods.updateStats = function (
+  nodeCount: number,
+  maxDepth: number,
+  totalTokens?: number,
+) {
   this.nodeCount = nodeCount;
   this.maxDepth = maxDepth;
   if (totalTokens !== undefined) {
@@ -201,12 +219,14 @@ ConversationSchema.methods.updateStats = function(nodeCount: number, maxDepth: n
   return this.save();
 };
 
-ConversationSchema.methods.startEdit = function(user: UserReference) {
+ConversationSchema.methods.startEdit = function (user: UserReference) {
   if (!this.activity.currentEditors) {
     this.activity.currentEditors = [];
   }
-  
-  const existingEditor = this.activity.currentEditors.find(e => e.id.equals(user.id));
+
+  const existingEditor = this.activity.currentEditors.find((e) =>
+    e.id.equals(user.id),
+  );
   if (!existingEditor) {
     this.activity.currentEditors.push(user);
     this.activity.isBeingEdited = true;
@@ -218,9 +238,11 @@ ConversationSchema.methods.startEdit = function(user: UserReference) {
   return Promise.resolve(this);
 };
 
-ConversationSchema.methods.endEdit = function(userId: Types.ObjectId) {
+ConversationSchema.methods.endEdit = function (userId: Types.ObjectId) {
   if (this.activity.currentEditors) {
-    this.activity.currentEditors = this.activity.currentEditors.filter(e => !e.id.equals(userId));
+    this.activity.currentEditors = this.activity.currentEditors.filter(
+      (e) => !e.id.equals(userId),
+    );
     this.activity.isBeingEdited = this.activity.currentEditors.length > 0;
     this.version += 1;
     return this.save();
@@ -229,7 +251,10 @@ ConversationSchema.methods.endEdit = function(userId: Types.ObjectId) {
 };
 
 // Static methods
-ConversationSchema.statics.findByCanvas = function(canvasId: Types.ObjectId, includeDeleted = false) {
+ConversationSchema.statics.findByCanvas = function (
+  canvasId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = { canvasId };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -237,7 +262,10 @@ ConversationSchema.statics.findByCanvas = function(canvasId: Types.ObjectId, inc
   return this.find(filter).sort({ 'activity.lastEditedAt': -1 });
 };
 
-ConversationSchema.statics.findByParticipant = function(userId: Types.ObjectId, includeDeleted = false) {
+ConversationSchema.statics.findByParticipant = function (
+  userId: Types.ObjectId,
+  includeDeleted = false,
+) {
   const filter: any = { 'participants.id': userId };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
@@ -245,16 +273,21 @@ ConversationSchema.statics.findByParticipant = function(userId: Types.ObjectId, 
   return this.find(filter).sort({ 'activity.lastEditedAt': -1 });
 };
 
-ConversationSchema.statics.searchInCanvas = function(canvasId: Types.ObjectId, searchText: string, includeDeleted = false) {
-  const filter: any = { 
+ConversationSchema.statics.searchInCanvas = function (
+  canvasId: Types.ObjectId,
+  searchText: string,
+  includeDeleted = false,
+) {
+  const filter: any = {
     canvasId,
-    $text: { $search: searchText }
+    $text: { $search: searchText },
   };
   if (!includeDeleted) {
     filter.isDeleted = { $ne: true };
   }
-  return this.find(filter, { score: { $meta: 'textScore' } })
-    .sort({ score: { $meta: 'textScore' } });
+  return this.find(filter, { score: { $meta: 'textScore' } }).sort({
+    score: { $meta: 'textScore' },
+  });
 };
 
 // Virtual population for nodes
@@ -263,7 +296,7 @@ ConversationSchema.virtual('nodes', {
   localField: '_id',
   foreignField: 'conversationId',
   match: { isDeleted: { $ne: true } },
-  options: { sort: { createdAt: 1 } }
+  options: { sort: { createdAt: 1 } },
 });
 
 // JSON transformation handled in service layer

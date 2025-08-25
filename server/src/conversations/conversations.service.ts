@@ -1,14 +1,28 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model, Types } from 'mongoose';
 import { openai } from '@ai-sdk/openai';
 import { generateText, streamText } from 'ai';
+import { ActivityService } from './activity.service';
 
 import { Canvas, CanvasModel } from '../schemas/canvas.schema';
-import { Conversation, ConversationModel } from '../schemas/conversation.schema';
-import { ConversationNode, ConversationNodeModel } from '../schemas/conversation-node.schema';
-import { EditingSessionModel, EditingSessionDocument } from '../schemas/editing-session.schema';
+import {
+  Conversation,
+  ConversationModel,
+} from '../schemas/conversation.schema';
+import {
+  ConversationNode,
+  ConversationNodeModel,
+} from '../schemas/conversation-node.schema';
+import {
+  EditingSessionModel,
+  EditingSessionDocument,
+} from '../schemas/editing-session.schema';
 
 import {
   Canvas as CanvasType,
@@ -25,14 +39,33 @@ import {
 export class ConversationsService {
   constructor(
     @InjectModel(Canvas.name) private canvasModel: Model<CanvasModel>,
-    @InjectModel(Conversation.name) private conversationModel: Model<ConversationModel>,
-    @InjectModel(ConversationNode.name) private nodeModel: Model<ConversationNodeModel>,
-    @InjectModel(EditingSessionModel.name) private sessionModel: Model<EditingSessionDocument>,
+    @InjectModel(Conversation.name)
+    private conversationModel: Model<ConversationModel>,
+    @InjectModel(ConversationNode.name)
+    private nodeModel: Model<ConversationNodeModel>,
+    @InjectModel(EditingSessionModel.name)
+    private sessionModel: Model<EditingSessionDocument>,
     private configService: ConfigService,
+    private activityService: ActivityService,
   ) {}
 
   private getDefaultUserId(): string {
-    return this.configService.get<string>('DEFAULT_USER_ID') || '60f3b4b4c4c4c4c4c4c4c4c4';
+    return (
+      this.configService.get<string>('DEFAULT_USER_ID') ||
+      '60f3b4b4c4c4c4c4c4c4c4c4'
+    );
+  }
+
+  private getDefaultUserName(): string {
+    return this.configService.get<string>('DEFAULT_USER_NAME') || 'Demo User';
+  }
+
+  private getCurrentUser() {
+    // In a real app, this would get user from request context
+    return {
+      userId: this.getDefaultUserId(),
+      userName: this.getDefaultUserName(),
+    };
   }
 
   async getCanvas(): Promise<CanvasType> {
@@ -47,30 +80,34 @@ export class ConversationsService {
         lastActivityAt: new Date(),
         activity: {
           isBeingEdited: false,
-          currentEditors: []
-        }
+          currentEditors: [],
+        },
       });
     }
 
     // Get all conversations for this canvas
-    const conversations = await this.conversationModel.find({ 
-      canvasId: canvas._id,
-      isDeleted: { $ne: true }
-    }).sort({ 'activity.lastEditedAt': -1 });
+    const conversations = await this.conversationModel
+      .find({
+        canvasId: canvas._id,
+        isDeleted: { $ne: true },
+      })
+      .sort({ 'activity.lastEditedAt': -1 });
 
     // Convert to the expected format
     const trees: ConversationTree[] = await Promise.all(
       conversations.map(async (conv) => {
-        const nodes = await this.nodeModel.find({
-          conversationId: conv._id,
-          isDeleted: { $ne: true }
-        }).sort({ depth: 1, branchIndex: 1 });
+        const nodes = await this.nodeModel
+          .find({
+            conversationId: conv._id,
+            isDeleted: { $ne: true },
+          })
+          .sort({ depth: 1, branchIndex: 1 });
 
         return {
           id: conv._id.toString(),
           name: conv.name,
           description: conv.description,
-          nodes: nodes.map(node => ({
+          nodes: nodes.map((node) => ({
             id: node._id.toString(),
             prompt: node.prompt,
             response: node.response,
@@ -85,7 +122,7 @@ export class ConversationsService {
           updatedAt: conv.updatedAt,
           position: conv.position,
         };
-      })
+      }),
     );
 
     return {
@@ -97,7 +134,9 @@ export class ConversationsService {
     };
   }
 
-  async createConversationTree(createTreeDto: CreateConversationTreeDto): Promise<ConversationTree> {
+  async createConversationTree(
+    createTreeDto: CreateConversationTreeDto,
+  ): Promise<ConversationTree> {
     // Get or create default canvas
     let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
     if (!canvas) {
@@ -109,8 +148,8 @@ export class ConversationsService {
         lastActivityAt: new Date(),
         activity: {
           isBeingEdited: false,
-          currentEditors: []
-        }
+          currentEditors: [],
+        },
       });
     }
 
@@ -127,19 +166,20 @@ export class ConversationsService {
         activity: {
           isBeingEdited: false,
           currentEditors: [],
-          lastEditedAt: new Date()
-        }
+          lastEditedAt: new Date(),
+        },
       });
 
       // Create the root node
       const rootNode = await this.nodeModel.create({
         prompt: 'Welcome to your new conversation',
-        response: 'This is the start of your conversation tree. Click "Add New Branch" to begin chatting.',
+        response:
+          'This is the start of your conversation tree. Click "Add New Branch" to begin chatting.',
         conversationId: conversation._id,
         canvasId: canvas._id,
-        position: { 
-          x: createTreeDto.position.x + 50, 
-          y: createTreeDto.position.y + 100 
+        position: {
+          x: createTreeDto.position.x + 50,
+          y: createTreeDto.position.y + 100,
         },
         depth: 0,
         branchIndex: 0,
@@ -148,8 +188,8 @@ export class ConversationsService {
         activity: {
           isBeingEdited: false,
           currentEditors: [],
-          lastEditedAt: new Date()
-        }
+          lastEditedAt: new Date(),
+        },
       });
 
       // Update conversation with root node reference
@@ -157,12 +197,18 @@ export class ConversationsService {
       await conversation.save();
 
       // Update canvas stats
-      await this.canvasModel.findByIdAndUpdate(
-        canvas._id,
-        { 
-          $inc: { totalConversations: 1, totalNodes: 1 },
-          $set: { lastActivityAt: new Date() }
-        }
+      await this.canvasModel.findByIdAndUpdate(canvas._id, {
+        $inc: { totalConversations: 1, totalNodes: 1 },
+        $set: { lastActivityAt: new Date() },
+      });
+
+      // Log activity
+      const user = this.getCurrentUser();
+      await this.activityService.logConversationCreated(
+        canvas._id.toString(),
+        conversation._id.toString(),
+        user.userId,
+        user.userName,
       );
 
       // Return in expected format
@@ -170,13 +216,15 @@ export class ConversationsService {
         id: conversation._id.toString(),
         name: conversation.name,
         description: conversation.description,
-        nodes: [{
-          id: rootNode._id.toString(),
-          prompt: rootNode.prompt,
-          response: rootNode.response,
-          timestamp: rootNode.createdAt,
-          position: rootNode.position,
-        }],
+        nodes: [
+          {
+            id: rootNode._id.toString(),
+            prompt: rootNode.prompt,
+            response: rootNode.response,
+            timestamp: rootNode.createdAt,
+            position: rootNode.position,
+          },
+        ],
         rootNodeId: rootNode._id.toString(),
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
@@ -193,16 +241,18 @@ export class ConversationsService {
       return null;
     }
 
-    const nodes = await this.nodeModel.find({
-      conversationId: conversation._id,
-      isDeleted: { $ne: true }
-    }).sort({ depth: 1, branchIndex: 1 });
+    const nodes = await this.nodeModel
+      .find({
+        conversationId: conversation._id,
+        isDeleted: { $ne: true },
+      })
+      .sort({ depth: 1, branchIndex: 1 });
 
     return {
       id: conversation._id.toString(),
       name: conversation.name,
       description: conversation.description,
-      nodes: nodes.map(node => ({
+      nodes: nodes.map((node) => ({
         id: node._id.toString(),
         prompt: node.prompt,
         response: node.response,
@@ -234,28 +284,25 @@ export class ConversationsService {
       // Soft delete all nodes in this conversation
       await this.nodeModel.updateMany(
         { conversationId: treeId },
-        { 
-          isDeleted: true, 
-          deletedAt: new Date() 
-        }
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
       );
 
       // Update canvas stats
-      const nodeCount = await this.nodeModel.countDocuments({ 
+      const nodeCount = await this.nodeModel.countDocuments({
         conversationId: treeId,
-        isDeleted: { $ne: true }
+        isDeleted: { $ne: true },
       });
-      
-      await this.canvasModel.findByIdAndUpdate(
-        conversation.canvasId,
-        { 
-          $inc: { 
-            totalConversations: -1, 
-            totalNodes: -nodeCount 
-          },
-          $set: { lastActivityAt: new Date() }
-        }
-      );
+
+      await this.canvasModel.findByIdAndUpdate(conversation.canvasId, {
+        $inc: {
+          totalConversations: -1,
+          totalNodes: -nodeCount,
+        },
+        $set: { lastActivityAt: new Date() },
+      });
 
       return true;
     } catch (error) {
@@ -263,7 +310,10 @@ export class ConversationsService {
     }
   }
 
-  async updateTree(treeId: string, updateData: { position?: { x: number; y: number } }): Promise<ConversationTree | null> {
+  async updateTree(
+    treeId: string,
+    updateData: { position?: { x: number; y: number } },
+  ): Promise<ConversationTree | null> {
     const conversation = await this.conversationModel.findById(treeId);
     if (!conversation || conversation.isDeleted) {
       return null;
@@ -277,16 +327,20 @@ export class ConversationsService {
     return await this.getConversationTree(treeId);
   }
 
-  async addNode(treeId: string, createNodeDto: CreateNodeDto): Promise<ConversationNodeType | null> {
+  async addNode(
+    treeId: string,
+    createNodeDto: CreateNodeDto,
+  ): Promise<ConversationNodeType | null> {
     const conversation = await this.conversationModel.findById(treeId);
     if (!conversation || conversation.isDeleted) {
       return null;
     }
 
     // Handle empty prompt for initial node creation by providing a placeholder
-    const prompt = createNodeDto.prompt && createNodeDto.prompt.trim() !== '' 
-      ? createNodeDto.prompt 
-      : 'Click to edit this prompt...';
+    const prompt =
+      createNodeDto.prompt && createNodeDto.prompt.trim() !== ''
+        ? createNodeDto.prompt
+        : 'Click to edit this prompt...';
 
     try {
       let parentNode: any = null;
@@ -316,8 +370,8 @@ export class ConversationsService {
         activity: {
           isBeingEdited: false,
           currentEditors: [],
-          lastEditedAt: new Date()
-        }
+          lastEditedAt: new Date(),
+        },
       });
 
       // Update parent's child count
@@ -327,14 +381,35 @@ export class ConversationsService {
       }
 
       // Update conversation stats
-      await this.conversationModel.findByIdAndUpdate(
-        treeId,
-        { 
-          $inc: { nodeCount: 1 },
-          $max: { maxDepth: depth },
-          $set: { 'activity.lastEditedAt': new Date() }
-        }
-      );
+      await this.conversationModel.findByIdAndUpdate(treeId, {
+        $inc: { nodeCount: 1 },
+        $max: { maxDepth: depth },
+        $set: { 'activity.lastEditedAt': new Date() },
+      });
+
+      // Log activity
+      const user = this.getCurrentUser();
+      if (createNodeDto.parentId) {
+        // This is a branch creation
+        await this.activityService.logBranchCreated(
+          conversation.canvasId.toString(),
+          treeId,
+          node._id.toString(),
+          user.userId,
+          user.userName,
+        );
+      } else {
+        // This is a new node creation
+        await this.activityService.logActivity({
+          canvasId: conversation.canvasId.toString(),
+          conversationId: treeId,
+          nodeId: node._id.toString(),
+          userId: user.userId,
+          userName: user.userName,
+          activityType: 'node_created' as any,
+          description: `${user.userName} created a new node`,
+        });
+      }
 
       return {
         id: node._id.toString(),
@@ -349,9 +424,17 @@ export class ConversationsService {
     }
   }
 
-  async updateNode(treeId: string, nodeId: string, updateNodeDto: UpdateNodeDto): Promise<ConversationNodeType | null> {
+  async updateNode(
+    treeId: string,
+    nodeId: string,
+    updateNodeDto: UpdateNodeDto,
+  ): Promise<ConversationNodeType | null> {
     const node = await this.nodeModel.findById(nodeId);
-    if (!node || node.isDeleted || !node.conversationId.equals(new Types.ObjectId(treeId))) {
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
       return null;
     }
 
@@ -368,6 +451,24 @@ export class ConversationsService {
 
     const savedNode = await node.save();
 
+    // Log activity for node edits
+    const user = this.getCurrentUser();
+    const editTypes: string[] = [];
+    if (updateNodeDto.prompt !== undefined) editTypes.push('prompt');
+    if (updateNodeDto.response !== undefined) editTypes.push('response');
+    if (updateNodeDto.position !== undefined) editTypes.push('position');
+    
+    if (editTypes.length > 0) {
+      await this.activityService.logNodeEdited(
+        node.canvasId.toString(),
+        treeId,
+        nodeId,
+        user.userId,
+        user.userName,
+        `edited ${editTypes.join(' and ')}`,
+      );
+    }
+
     return {
       id: savedNode._id.toString(),
       prompt: savedNode.prompt,
@@ -383,7 +484,11 @@ export class ConversationsService {
   async deleteNode(treeId: string, nodeId: string): Promise<boolean> {
     try {
       const node = await this.nodeModel.findById(nodeId);
-      if (!node || node.isDeleted || !node.conversationId.equals(new Types.ObjectId(treeId))) {
+      if (
+        !node ||
+        node.isDeleted ||
+        !node.conversationId.equals(new Types.ObjectId(treeId))
+      ) {
         return false;
       }
 
@@ -394,20 +499,16 @@ export class ConversationsService {
 
       // Update parent's child count
       if (node.parentId) {
-        await this.nodeModel.findByIdAndUpdate(
-          node.parentId,
-          { $inc: { childCount: -1 } }
-        );
+        await this.nodeModel.findByIdAndUpdate(node.parentId, {
+          $inc: { childCount: -1 },
+        });
       }
 
       // Update conversation stats
-      await this.conversationModel.findByIdAndUpdate(
-        treeId,
-        { 
-          $inc: { nodeCount: -1 },
-          $set: { 'activity.lastEditedAt': new Date() }
-        }
-      );
+      await this.conversationModel.findByIdAndUpdate(treeId, {
+        $inc: { nodeCount: -1 },
+        $set: { 'activity.lastEditedAt': new Date() },
+      });
 
       return true;
     } catch (error) {
@@ -415,14 +516,19 @@ export class ConversationsService {
     }
   }
 
-  async getNodeChildren(treeId: string, nodeId: string): Promise<ConversationNodeType[]> {
-    const nodes = await this.nodeModel.find({
-      parentId: nodeId,
-      conversationId: treeId,
-      isDeleted: { $ne: true }
-    }).sort({ branchIndex: 1 });
+  async getNodeChildren(
+    treeId: string,
+    nodeId: string,
+  ): Promise<ConversationNodeType[]> {
+    const nodes = await this.nodeModel
+      .find({
+        parentId: nodeId,
+        conversationId: treeId,
+        isDeleted: { $ne: true },
+      })
+      .sort({ branchIndex: 1 });
 
-    return nodes.map(node => ({
+    return nodes.map((node) => ({
       id: node._id.toString(),
       prompt: node.prompt,
       response: node.response,
@@ -434,11 +540,14 @@ export class ConversationsService {
     }));
   }
 
-  async getConversationHistory(treeId: string, nodeId: string): Promise<ConversationNodeType[]> {
+  async getConversationHistory(
+    treeId: string,
+    nodeId: string,
+  ): Promise<ConversationNodeType[]> {
     // Get conversation path manually
     const path: any[] = [];
     let currentNode: any = await this.nodeModel.findById(nodeId);
-    
+
     while (currentNode && !currentNode.isDeleted) {
       path.unshift(currentNode);
       if (currentNode.parentId) {
@@ -447,10 +556,10 @@ export class ConversationsService {
         break;
       }
     }
-    
+
     return path
-      .filter(node => node.prompt && node.response && !node.isDeleted)
-      .map(node => ({
+      .filter((node) => node.prompt && node.response && !node.isDeleted)
+      .map((node) => ({
         id: node._id.toString(),
         prompt: node.prompt,
         response: node.response,
@@ -474,17 +583,21 @@ export class ConversationsService {
       node.aiModel = chatRequest.model;
       await node.save();
 
-      const history = await this.getConversationHistory(chatRequest.treeId, node._id.toString());
-      const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
-      
+      const history = await this.getConversationHistory(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+      const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
+        [];
+
       // Add conversation history
-      history.forEach(historyNode => {
+      history.forEach((historyNode) => {
         if (historyNode.prompt && historyNode.response) {
           messages.push({ role: 'user', content: historyNode.prompt });
           messages.push({ role: 'assistant', content: historyNode.response });
         }
       });
-      
+
       // Add current prompt
       messages.push({ role: 'user', content: chatRequest.prompt });
 
@@ -497,7 +610,7 @@ export class ConversationsService {
       node.response = text;
       await node.save();
 
-      return { 
+      return {
         node: {
           id: node._id.toString(),
           prompt: node.prompt,
@@ -507,7 +620,7 @@ export class ConversationsService {
           parentId: node.parentId?.toString(),
           isGenerating: node.isGenerating,
           position: node.position,
-        }
+        },
       };
     } catch (error) {
       console.error('Chat error:', error);
@@ -528,8 +641,8 @@ export class ConversationsService {
       node.isGenerating = true;
       await node.save();
 
-      yield { 
-        type: 'nodePromptUpdate', 
+      yield {
+        type: 'nodePromptUpdate',
         data: {
           id: node._id.toString(),
           prompt: node.prompt,
@@ -539,20 +652,24 @@ export class ConversationsService {
           parentId: node.parentId?.toString(),
           isGenerating: node.isGenerating,
           position: node.position,
-        }
+        },
       };
 
-      const history = await this.getConversationHistory(chatRequest.treeId, node._id.toString());
-      const messages: Array<{role: 'user' | 'assistant', content: string}> = [];
-      
+      const history = await this.getConversationHistory(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+      const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
+        [];
+
       // Add conversation history
-      history.forEach(historyNode => {
+      history.forEach((historyNode) => {
         if (historyNode.prompt && historyNode.response) {
           messages.push({ role: 'user', content: historyNode.prompt });
           messages.push({ role: 'assistant', content: historyNode.response });
         }
       });
-      
+
       // Add current prompt
       messages.push({ role: 'user', content: chatRequest.prompt });
 
@@ -566,14 +683,17 @@ export class ConversationsService {
       for await (const delta of result.textStream) {
         fullText += delta;
         node.response = fullText;
-        yield { type: 'nodeResponseUpdate', data: { nodeId: node._id.toString(), response: fullText } };
+        yield {
+          type: 'nodeResponseUpdate',
+          data: { nodeId: node._id.toString(), response: fullText },
+        };
       }
 
       node.isGenerating = false;
       await node.save();
 
-      yield { 
-        type: 'nodeComplete', 
+      yield {
+        type: 'nodeComplete',
         data: {
           id: node._id.toString(),
           prompt: node.prompt,
@@ -583,7 +703,7 @@ export class ConversationsService {
           parentId: node.parentId?.toString(),
           isGenerating: node.isGenerating,
           position: node.position,
-        }
+        },
       };
     } catch (error) {
       console.error('Chat stream error:', error);

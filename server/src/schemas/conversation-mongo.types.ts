@@ -42,18 +42,18 @@ export interface ConversationNodeDocument extends BaseDocument {
   canvasId: Types.ObjectId; // Reference to parent canvas
   isGenerating?: boolean;
   position: Position;
-  
+
   // Branching support
   childCount: number;
   depth: number; // Distance from root
   branchIndex: number; // Index among siblings
-  
+
   // Activity tracking
   activity: ActivityInfo;
-  
+
   // React Flow compatibility
   reactFlowId: string; // For client-side React Flow
-  
+
   // Metadata
   tokenCount?: number;
   processingTime?: number;
@@ -65,31 +65,31 @@ export interface ConversationDocument extends BaseDocument {
   name: string;
   description?: string;
   canvasId: Types.ObjectId; // Reference to parent canvas
-  
+
   // Root node reference
   rootNodeId: Types.ObjectId;
-  
+
   // Position on canvas
   position: Position;
-  
+
   // Tree structure
   nodeCount: number;
   maxDepth: number;
-  
+
   // Activity tracking
   activity: ActivityInfo;
-  
+
   // React Flow compatibility - nodes and edges stored as computed fields
   // Actual nodes are stored in separate collection
-  
+
   // Collaboration
   participants: UserReference[];
-  
+
   // Settings
   defaultModel?: string;
   allowBranching: boolean;
   maxNodes?: number;
-  
+
   // Statistics
   totalTokens?: number;
   avgResponseTime?: number;
@@ -99,7 +99,7 @@ export interface ConversationDocument extends BaseDocument {
 export interface CanvasDocument extends BaseDocument {
   name: string;
   description?: string;
-  
+
   // Owner and permissions
   ownerId: Types.ObjectId;
   collaborators: {
@@ -107,26 +107,26 @@ export interface CanvasDocument extends BaseDocument {
     permissions: 'read' | 'write' | 'admin';
     joinedAt: Date;
   }[];
-  
+
   // Visibility settings
   isPublic: boolean;
   shareToken?: string;
-  
+
   // Layout settings
   viewport: {
     x: number;
     y: number;
     zoom: number;
   };
-  
+
   // Activity tracking
   activity: ActivityInfo;
-  
+
   // Statistics
   totalConversations: number;
   totalNodes: number;
   lastActivityAt: Date;
-  
+
   // Settings
   settings: {
     allowGuestEditing: boolean;
@@ -182,16 +182,16 @@ export interface EditingSession extends Document {
   canvasId: Types.ObjectId;
   conversationId?: Types.ObjectId;
   nodeId?: Types.ObjectId;
-  
+
   sessionId: string;
   startedAt: Date;
   lastActivityAt: Date;
   isActive: boolean;
-  
+
   // What they're editing
   editingType: 'canvas' | 'conversation' | 'node';
   editingTarget: Types.ObjectId;
-  
+
   // Lock information
   hasLock: boolean;
   lockExpiry?: Date;
@@ -250,7 +250,16 @@ export interface NodeSearchQuery {
 
 // Event types for real-time updates
 export interface RealtimeEvent {
-  type: 'node_update' | 'node_create' | 'node_delete' | 'conversation_update' | 'canvas_update' | 'user_join' | 'user_leave' | 'lock_acquired' | 'lock_released';
+  type:
+    | 'node_update'
+    | 'node_create'
+    | 'node_delete'
+    | 'conversation_update'
+    | 'canvas_update'
+    | 'user_join'
+    | 'user_leave'
+    | 'lock_acquired'
+    | 'lock_released';
   canvasId: string;
   conversationId?: string;
   nodeId?: string;
