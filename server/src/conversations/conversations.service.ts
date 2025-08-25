@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -9,6 +11,7 @@ import { Model, Types } from 'mongoose';
 import { openai } from '@ai-sdk/openai';
 import { generateText, streamText } from 'ai';
 import { ActivityService } from './activity.service';
+import { CollaborationGateway } from './collaboration.gateway';
 
 import { Canvas, CanvasModel } from '../schemas/canvas.schema';
 import {
@@ -47,6 +50,8 @@ export class ConversationsService {
     private sessionModel: Model<EditingSessionDocument>,
     private configService: ConfigService,
     private activityService: ActivityService,
+    @Inject(forwardRef(() => CollaborationGateway))
+    private collaborationGateway: CollaborationGateway,
   ) {}
 
   private getDefaultUserId(): string {
@@ -60,15 +65,23 @@ export class ConversationsService {
     return this.configService.get<string>('DEFAULT_USER_NAME') || 'Demo User';
   }
 
-  private getCurrentUser() {
-    // In a real app, this would get user from request context
+  private getCurrentUser(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }) {
+    // Use user from headers if provided, otherwise fall back to default
+    if (userFromHeaders && userFromHeaders.userId && userFromHeaders.userName) {
+      return {
+        userId: userFromHeaders.userId,
+        userName: userFromHeaders.userName,
+      };
+    }
+    
+    // Fallback to default user
     return {
       userId: this.getDefaultUserId(),
       userName: this.getDefaultUserName(),
     };
   }
 
-  async getCanvas(): Promise<CanvasType> {
+  async getCanvas(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<CanvasType> {
     // Get or create default canvas
     let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
     if (!canvas) {
@@ -136,6 +149,7 @@ export class ConversationsService {
 
   async createConversationTree(
     createTreeDto: CreateConversationTreeDto,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
   ): Promise<ConversationTree> {
     // Get or create default canvas
     let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
@@ -203,13 +217,34 @@ export class ConversationsService {
       });
 
       // Log activity
-      const user = this.getCurrentUser();
+      const user = this.getCurrentUser(userFromHeaders);
       await this.activityService.logConversationCreated(
         canvas._id.toString(),
         conversation._id.toString(),
         user.userId,
         user.userName,
       );
+
+      // Broadcast the new tree to all connected clients
+      const treeResult = {
+        id: conversation._id.toString(),
+        name: conversation.name,
+        description: conversation.description,
+        nodes: [
+          {
+            id: rootNode._id.toString(),
+            prompt: rootNode.prompt,
+            response: rootNode.response,
+            timestamp: rootNode.createdAt,
+            position: rootNode.position,
+          },
+        ],
+        rootNodeId: rootNode._id.toString(),
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        position: conversation.position,
+      };
+      await this.collaborationGateway.broadcastTreeCreated(canvas._id.toString(), treeResult);
 
       // Return in expected format
       return {
@@ -269,7 +304,7 @@ export class ConversationsService {
     };
   }
 
-  async deleteConversationTree(treeId: string): Promise<boolean> {
+  async deleteConversationTree(treeId: string, userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<boolean> {
     try {
       const conversation = await this.conversationModel.findById(treeId);
       if (!conversation || conversation.isDeleted) {
@@ -304,6 +339,9 @@ export class ConversationsService {
         $set: { lastActivityAt: new Date() },
       });
 
+      // Broadcast tree deletion to all connected clients
+      await this.collaborationGateway.broadcastTreeDeleted(conversation.canvasId.toString(), treeId);
+
       return true;
     } catch (error) {
       throw error;
@@ -322,6 +360,12 @@ export class ConversationsService {
     if (updateData.position !== undefined) {
       conversation.position = updateData.position;
       await conversation.save();
+      
+      // Broadcast tree update to all connected clients
+      const updatedTree = await this.getConversationTree(treeId);
+      if (updatedTree) {
+        await this.collaborationGateway.broadcastTreeUpdated(conversation.canvasId.toString(), updatedTree);
+      }
     }
 
     return await this.getConversationTree(treeId);
@@ -330,6 +374,7 @@ export class ConversationsService {
   async addNode(
     treeId: string,
     createNodeDto: CreateNodeDto,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
   ): Promise<ConversationNodeType | null> {
     const conversation = await this.conversationModel.findById(treeId);
     if (!conversation || conversation.isDeleted) {
@@ -388,7 +433,7 @@ export class ConversationsService {
       });
 
       // Log activity
-      const user = this.getCurrentUser();
+      const user = this.getCurrentUser(userFromHeaders);
       if (createNodeDto.parentId) {
         // This is a branch creation
         await this.activityService.logBranchCreated(
@@ -411,7 +456,8 @@ export class ConversationsService {
         });
       }
 
-      return {
+      // Broadcast node creation to all connected clients
+      const nodeResult = {
         id: node._id.toString(),
         prompt: node.prompt,
         model: node.aiModel,
@@ -419,6 +465,9 @@ export class ConversationsService {
         parentId: node.parentId?.toString(),
         position: node.position,
       };
+      await this.collaborationGateway.broadcastNodeCreated(conversation.canvasId.toString(), treeId, nodeResult);
+
+      return nodeResult;
     } catch (error) {
       throw error;
     }
@@ -428,6 +477,7 @@ export class ConversationsService {
     treeId: string,
     nodeId: string,
     updateNodeDto: UpdateNodeDto,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
   ): Promise<ConversationNodeType | null> {
     const node = await this.nodeModel.findById(nodeId);
     if (
@@ -452,7 +502,7 @@ export class ConversationsService {
     const savedNode = await node.save();
 
     // Log activity for node edits
-    const user = this.getCurrentUser();
+    const user = this.getCurrentUser(userFromHeaders);
     const editTypes: string[] = [];
     if (updateNodeDto.prompt !== undefined) editTypes.push('prompt');
     if (updateNodeDto.response !== undefined) editTypes.push('response');
@@ -469,7 +519,8 @@ export class ConversationsService {
       );
     }
 
-    return {
+    // Broadcast node update to all connected clients
+    const nodeResult = {
       id: savedNode._id.toString(),
       prompt: savedNode.prompt,
       response: savedNode.response,
@@ -479,9 +530,12 @@ export class ConversationsService {
       isGenerating: savedNode.isGenerating,
       position: savedNode.position,
     };
+    await this.collaborationGateway.broadcastNodeUpdated(savedNode.canvasId.toString(), treeId, nodeResult);
+
+    return nodeResult;
   }
 
-  async deleteNode(treeId: string, nodeId: string): Promise<boolean> {
+  async deleteNode(treeId: string, nodeId: string, userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<boolean> {
     try {
       const node = await this.nodeModel.findById(nodeId);
       if (
@@ -502,7 +556,7 @@ export class ConversationsService {
       
       if (isRootNode) {
         // If deleting root node, delete the entire conversation tree
-        return await this.deleteConversationTree(treeId);
+        return await this.deleteConversationTree(treeId, userFromHeaders);
       }
 
       // Get all descendant nodes recursively
@@ -533,7 +587,7 @@ export class ConversationsService {
       });
 
       // Log activity
-      const user = this.getCurrentUser();
+      const user = this.getCurrentUser(userFromHeaders);
       await this.activityService.logActivity({
         canvasId: node.canvasId.toString(),
         conversationId: treeId,
@@ -543,6 +597,9 @@ export class ConversationsService {
         activityType: 'node_deleted' as any,
         description: `${user.userName} deleted node and ${descendantIds.length} descendant(s)`,
       });
+
+      // Broadcast node deletion to all connected clients
+      await this.collaborationGateway.broadcastNodeDeleted(node.canvasId.toString(), treeId, nodeId);
 
       return true;
     } catch (error) {
@@ -680,7 +737,7 @@ export class ConversationsService {
     }
   }
 
-  async *chatStream(chatRequest: ChatRequest) {
+  async *chatStream(chatRequest: ChatRequest, userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }) {
     const node = await this.nodeModel.findById(chatRequest.nodeId);
     if (!node || node.isDeleted) {
       return;

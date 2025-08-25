@@ -8,11 +8,20 @@ const AI_MODELS = [
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
 ];
 
+const DEMO_USERS = [
+  { userId: 'user_demo_123', userName: 'Alex Chen', userEmail: 'alex@example.com', color: '#3B82F6' },
+  { userId: 'user_demo_456', userName: 'Sarah Johnson', userEmail: 'sarah@example.com', color: '#10B981' },
+  { userId: 'user_demo_789', userName: 'Mike Rodriguez', userEmail: 'mike@example.com', color: '#F59E0B' },
+  { userId: 'user_demo_101', userName: 'Emma Davis', userEmail: 'emma@example.com', color: '#EF4444' },
+];
+
 interface ToolbarProps {
   onToggleActivityPanel?: () => void;
+  currentUser?: { userId: string; userName: string; userEmail: string; color: string };
+  onUserChange?: (user: { userId: string; userName: string; userEmail: string; color: string }) => void;
 }
 
-const Toolbar = observer(({ onToggleActivityPanel }: ToolbarProps) => {
+const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange }: ToolbarProps) => {
   const { conversationStore } = useStores();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTreeName, setNewTreeName] = useState('');
@@ -56,6 +65,29 @@ const Toolbar = observer(({ onToggleActivityPanel }: ToolbarProps) => {
       </div>
 
       <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
+          <label htmlFor="user-select" className="text-sm font-medium text-gray-700">
+            Current User:
+          </label>
+          <select
+            id="user-select"
+            value={currentUser?.userId || DEMO_USERS[0].userId}
+            onChange={(e) => {
+              const user = DEMO_USERS.find(u => u.userId === e.target.value);
+              if (user && onUserChange) {
+                onUserChange(user);
+              }
+            }}
+            className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            {DEMO_USERS.map((user) => (
+              <option key={user.userId} value={user.userId}>
+                {user.userName}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex items-center space-x-2">
           <label htmlFor="model-select" className="text-sm font-medium text-gray-700">
             Default Model:

@@ -45,6 +45,7 @@ interface UseActivityServiceReturn {
   // Real-time listeners
   onActivityUpdate: (callback: (activity: Activity) => void) => void;
   onNotification: (callback: (notification: ActivityNotification) => void) => void;
+  onCanvasChange: (callback: (event: any) => void) => void;
 }
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
@@ -67,6 +68,7 @@ export const useActivityService = ({
   // Refs for callbacks to avoid dependency issues
   const activityCallbackRef = useRef<((activity: Activity) => void) | null>(null);
   const notificationCallbackRef = useRef<((notification: ActivityNotification) => void) | null>(null);
+  const canvasChangeCallbackRef = useRef<((event: any) => void) | null>(null);
 
   // Initialize socket connection
   useEffect(() => {
@@ -137,6 +139,13 @@ export const useActivityService = ({
       }));
       
       setActivities(prev => [...bulkActivities, ...prev].slice(0, 100));
+    });
+
+    // Listen for canvas changes
+    socketInstance.on('canvas_change', (event: any) => {
+      if (canvasChangeCallbackRef.current) {
+        canvasChangeCallbackRef.current(event);
+      }
     });
 
     return () => {
@@ -245,6 +254,10 @@ export const useActivityService = ({
     notificationCallbackRef.current = callback;
   }, []);
 
+  const onCanvasChange = useCallback((callback: (event: any) => void) => {
+    canvasChangeCallbackRef.current = callback;
+  }, []);
+
   // Computed values
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -272,5 +285,6 @@ export const useActivityService = ({
     clearNotifications,
     onActivityUpdate,
     onNotification,
+    onCanvasChange,
   };
 };

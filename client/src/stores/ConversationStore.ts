@@ -17,16 +17,37 @@ class ConversationStore {
   nodeLoadingStates: Map<string, boolean> = new Map();
   streamingNodes: Map<string, ConversationNode> = new Map();
   error: string | null = null;
+  currentUser: { userId: string; userName: string; userEmail: string } | null = null;
 
   constructor() {
     makeAutoObservable(this);
     this.loadCanvas();
   }
 
+  setCurrentUser(user: { userId: string; userName: string; userEmail: string }) {
+    this.currentUser = user;
+  }
+
+  private getHeaders() {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (this.currentUser) {
+      headers['X-User-Id'] = this.currentUser.userId;
+      headers['X-User-Name'] = this.currentUser.userName;
+      headers['X-User-Email'] = this.currentUser.userEmail;
+    }
+    
+    return headers;
+  }
+
   async loadCanvas() {
     this.setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/conversations/canvas');
+      const response = await fetch('http://localhost:3001/conversations/canvas', {
+        headers: this.getHeaders(),
+      });
       if (!response.ok) throw new Error('Failed to load canvas');
       
       const canvas = await response.json();
@@ -61,7 +82,7 @@ class ConversationStore {
     try {
       const response = await fetch('http://localhost:3001/conversations/trees', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify(createTreeDto),
       });
       
@@ -90,6 +111,7 @@ class ConversationStore {
     try {
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}`, {
         method: 'DELETE',
+        headers: this.getHeaders(),
       });
       
       if (!response.ok) throw new Error('Failed to delete conversation tree');
@@ -121,7 +143,7 @@ class ConversationStore {
     try {
       const response = await fetch('http://localhost:3001/conversations/chat/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify(chatRequest),
       });
       
@@ -220,7 +242,7 @@ class ConversationStore {
     try {
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify({ position }),
       });
       
@@ -242,7 +264,7 @@ class ConversationStore {
     try {
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify({ position }),
       });
       
@@ -313,7 +335,7 @@ class ConversationStore {
     try {
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           prompt: '',
           parentId: parentNodeId,
@@ -363,6 +385,7 @@ class ConversationStore {
       
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}`, {
         method: 'DELETE',
+        headers: this.getHeaders(),
       });
       
       if (!response.ok) throw new Error('Failed to delete node');
