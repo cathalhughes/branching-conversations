@@ -9,6 +9,7 @@ import {
   HttpException,
   HttpStatus,
   Res,
+  Headers,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ConversationsService } from './conversations.service';
@@ -23,14 +24,22 @@ import {
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
+  private extractUserFromHeaders(headers: Record<string, string>) {
+    return {
+      userId: headers['x-user-id'] || null,
+      userName: headers['x-user-name'] || null,
+      userEmail: headers['x-user-email'] || null,
+    };
+  }
+
   @Get('canvas')
-  getCanvas() {
-    return this.conversationsService.getCanvas();
+  getCanvas(@Headers() headers: Record<string, string>) {
+    return this.conversationsService.getCanvas(this.extractUserFromHeaders(headers));
   }
 
   @Post('trees')
-  createConversationTree(@Body() createTreeDto: CreateConversationTreeDto) {
-    return this.conversationsService.createConversationTree(createTreeDto);
+  createConversationTree(@Body() createTreeDto: CreateConversationTreeDto, @Headers() headers: Record<string, string>) {
+    return this.conversationsService.createConversationTree(createTreeDto, this.extractUserFromHeaders(headers));
   }
 
   @Get('trees/:treeId')
@@ -46,8 +55,8 @@ export class ConversationsController {
   }
 
   @Delete('trees/:treeId')
-  deleteConversationTree(@Param('treeId') treeId: string) {
-    const success = this.conversationsService.deleteConversationTree(treeId);
+  deleteConversationTree(@Param('treeId') treeId: string, @Headers() headers: Record<string, string>) {
+    const success = this.conversationsService.deleteConversationTree(treeId, this.extractUserFromHeaders(headers));
     if (!success) {
       throw new HttpException(
         'Conversation tree not found',
@@ -76,8 +85,9 @@ export class ConversationsController {
   addNode(
     @Param('treeId') treeId: string,
     @Body() createNodeDto: CreateNodeDto,
+    @Headers() headers: Record<string, string>,
   ) {
-    const node = this.conversationsService.addNode(treeId, createNodeDto);
+    const node = this.conversationsService.addNode(treeId, createNodeDto, this.extractUserFromHeaders(headers));
     if (!node) {
       throw new HttpException(
         'Conversation tree not found',
@@ -92,11 +102,13 @@ export class ConversationsController {
     @Param('treeId') treeId: string,
     @Param('nodeId') nodeId: string,
     @Body() updateNodeDto: UpdateNodeDto,
+    @Headers() headers: Record<string, string>,
   ) {
     const node = this.conversationsService.updateNode(
       treeId,
       nodeId,
       updateNodeDto,
+      this.extractUserFromHeaders(headers),
     );
     if (!node) {
       throw new HttpException('Node not found', HttpStatus.NOT_FOUND);
@@ -105,8 +117,8 @@ export class ConversationsController {
   }
 
   @Delete('trees/:treeId/nodes/:nodeId')
-  deleteNode(@Param('treeId') treeId: string, @Param('nodeId') nodeId: string) {
-    const success = this.conversationsService.deleteNode(treeId, nodeId);
+  deleteNode(@Param('treeId') treeId: string, @Param('nodeId') nodeId: string, @Headers() headers: Record<string, string>) {
+    const success = this.conversationsService.deleteNode(treeId, nodeId, this.extractUserFromHeaders(headers));
     if (!success) {
       throw new HttpException('Node not found', HttpStatus.NOT_FOUND);
     }
@@ -142,7 +154,7 @@ export class ConversationsController {
   }
 
   @Post('chat/stream')
-  async chatStream(@Body() chatRequest: ChatRequest, @Res() res: Response) {
+  async chatStream(@Body() chatRequest: ChatRequest, @Res() res: Response, @Headers() headers: Record<string, string>) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -152,6 +164,7 @@ export class ConversationsController {
     try {
       for await (const chunk of this.conversationsService.chatStream(
         chatRequest,
+        this.extractUserFromHeaders(headers),
       )) {
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }

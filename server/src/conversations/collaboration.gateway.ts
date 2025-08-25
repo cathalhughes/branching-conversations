@@ -581,6 +581,46 @@ export class CollaborationGateway
     this.server.to(`canvas:${canvasId}`).emit(event, data);
   }
 
+  // =================== CANVAS CHANGE BROADCASTING ===================
+
+  async broadcastCanvasChange(canvasId: string, changeType: string, data: any) {
+    try {
+      this.server.to(`canvas:${canvasId}`).emit('canvas_change', {
+        type: changeType,
+        data: data,
+        timestamp: new Date(),
+      });
+
+      this.logger.debug(`Broadcasted canvas change ${changeType} to canvas:${canvasId}`);
+    } catch (error) {
+      this.logger.error('Error broadcasting canvas change:', error);
+    }
+  }
+
+  async broadcastTreeCreated(canvasId: string, tree: any) {
+    await this.broadcastCanvasChange(canvasId, 'tree_created', { tree });
+  }
+
+  async broadcastTreeDeleted(canvasId: string, treeId: string) {
+    await this.broadcastCanvasChange(canvasId, 'tree_deleted', { treeId });
+  }
+
+  async broadcastTreeUpdated(canvasId: string, tree: any) {
+    await this.broadcastCanvasChange(canvasId, 'tree_updated', { tree });
+  }
+
+  async broadcastNodeCreated(canvasId: string, treeId: string, node: any) {
+    await this.broadcastCanvasChange(canvasId, 'node_created', { treeId, node });
+  }
+
+  async broadcastNodeUpdated(canvasId: string, treeId: string, node: any) {
+    await this.broadcastCanvasChange(canvasId, 'node_updated', { treeId, node });
+  }
+
+  async broadcastNodeDeleted(canvasId: string, treeId: string, nodeId: string) {
+    await this.broadcastCanvasChange(canvasId, 'node_deleted', { treeId, nodeId });
+  }
+
   // =================== ACTIVITY BROADCASTING ===================
 
   async broadcastActivity(canvasId: string, activity: any) {
