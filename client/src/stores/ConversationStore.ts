@@ -355,6 +355,41 @@ class ConversationStore {
     return tree.nodes.filter(node => node.parentId === nodeId);
   }
 
+  async deleteNode(treeId: string, nodeId: string) {
+    try {
+      // Check if this is the root node before deletion
+      const tree = this.getTreeById(treeId);
+      const isRootNode = tree && tree.rootNodeId === nodeId;
+      
+      const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete node');
+      
+      const wasSelectedNode = this.selectedNodeId === nodeId;
+      const wasSelectedTree = this.selectedTreeId === treeId;
+      
+      // Force refresh the canvas to get latest state
+      await this.loadCanvas();
+      
+      runInAction(() => {
+        // If we deleted a root node, the entire tree is gone
+        if (isRootNode && wasSelectedTree) {
+          this.selectedTreeId = null;
+          this.selectedNodeId = null;
+        } else if (wasSelectedNode) {
+          this.selectedNodeId = null;
+        }
+        this.error = null;
+      });
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'Unknown error';
+      });
+    }
+  }
+
   get selectedTree(): ConversationTree | undefined {
     return this.selectedTreeId ? this.getTreeById(this.selectedTreeId) : undefined;
   }

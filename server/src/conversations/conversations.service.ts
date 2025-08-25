@@ -492,10 +492,32 @@ export class ConversationsService {
         return false;
       }
 
-      // Soft delete the node
-      node.isDeleted = true;
-      node.deletedAt = new Date();
-      await node.save();
+      // Check if this is the root node
+      const conversation = await this.conversationModel.findById(treeId);
+      if (!conversation || conversation.isDeleted) {
+        return false;
+      }
+
+      const isRootNode = conversation.rootNodeId && conversation.rootNodeId.equals(new Types.ObjectId(nodeId));
+      
+      if (isRootNode) {
+        // If deleting root node, delete the entire conversation tree
+        return await this.deleteConversationTree(treeId);
+      }
+
+      // Get all descendant nodes recursively
+      const descendantIds = await this.getDescendantNodeIds(nodeId);
+      const totalNodesDeleted = descendantIds.length + 1; // +1 for the node itself
+
+      // Soft delete the node and all its descendants
+      const nodesToDelete = [nodeId, ...descendantIds];
+      await this.nodeModel.updateMany(
+        { _id: { $in: nodesToDelete } },
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        }
+      );
 
       // Update parent's child count
       if (node.parentId) {
@@ -506,14 +528,44 @@ export class ConversationsService {
 
       // Update conversation stats
       await this.conversationModel.findByIdAndUpdate(treeId, {
-        $inc: { nodeCount: -1 },
+        $inc: { nodeCount: -totalNodesDeleted },
         $set: { 'activity.lastEditedAt': new Date() },
+      });
+
+      // Log activity
+      const user = this.getCurrentUser();
+      await this.activityService.logActivity({
+        canvasId: node.canvasId.toString(),
+        conversationId: treeId,
+        nodeId: nodeId,
+        userId: user.userId,
+        userName: user.userName,
+        activityType: 'node_deleted' as any,
+        description: `${user.userName} deleted node and ${descendantIds.length} descendant(s)`,
       });
 
       return true;
     } catch (error) {
       throw error;
     }
+  }
+
+  private async getDescendantNodeIds(nodeId: string): Promise<string[]> {
+    const descendants: string[] = [];
+    
+    const children = await this.nodeModel.find({
+      parentId: nodeId,
+      isDeleted: { $ne: true },
+    });
+
+    for (const child of children) {
+      descendants.push(child._id.toString());
+      // Recursively get descendants of this child
+      const childDescendants = await this.getDescendantNodeIds(child._id.toString());
+      descendants.push(...childDescendants);
+    }
+
+    return descendants;
   }
 
   async getNodeChildren(

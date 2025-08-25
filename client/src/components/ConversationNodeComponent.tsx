@@ -6,8 +6,10 @@ import { ConversationNode } from '../types/conversation.types';
 export interface ConversationNodeData {
   node: ConversationNode;
   treeId: string;
+  rootNodeId: string;
   onSendMessage: (prompt: string, nodeId: string, model?: string) => void;
   onAddNode: (parentNodeId: string) => void;
+  onDeleteNode: (nodeId: string) => void;
   isLoading?: boolean;
 }
 
@@ -16,7 +18,7 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
   const [selectedModel, setSelectedModel] = useState('gpt-4');
   const [isEditing, setIsEditing] = useState(false);
   const [isResponseExpanded, setIsResponseExpanded] = useState(false);
-  const { node, treeId, onSendMessage, onAddNode, isLoading } = props.data as any as ConversationNodeData;
+  const { node, treeId, rootNodeId, onSendMessage, onAddNode, onDeleteNode, isLoading } = props.data as any as ConversationNodeData;
 
   const availableModels = [
     { value: 'gpt-4', label: 'GPT-4' },
@@ -45,6 +47,17 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
 
   const handleAddNode = () => {
     onAddNode(node.id);
+  };
+
+  const handleDeleteNode = () => {
+    const isRootNode = node.id === rootNodeId;
+    const confirmMessage = isRootNode
+      ? 'Are you sure you want to delete this entire conversation tree?'
+      : 'Are you sure you want to delete this node and all its children?';
+    
+    if (window.confirm(confirmMessage)) {
+      onDeleteNode(node.id);
+    }
   };
 
   const startEditing = () => {
@@ -85,6 +98,14 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
           <span className="text-xs text-gray-400">
             {new Date(node.timestamp).toLocaleTimeString()}
           </span>
+          <button
+            onClick={handleDeleteNode}
+            disabled={isGenerating}
+            className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 rounded hover:bg-red-50"
+            title="Delete this node and all its children"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
@@ -190,7 +211,7 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
       {hasContent && (
         <button
           onClick={handleAddNode}
-          disabled={isGenerating}
+          disabled={isGenerating || !node.response}
           className="w-full text-sm bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           <span>+</span>
