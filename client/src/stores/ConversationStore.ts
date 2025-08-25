@@ -238,6 +238,28 @@ class ConversationStore {
     }
   }
 
+  async updateTreePosition(treeId: string, position: { x: number; y: number }) {
+    try {
+      const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to update tree position');
+      
+      await this.loadCanvas();
+      
+      runInAction(() => {
+        this.error = null;
+      });
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'Unknown error';
+      });
+    }
+  }
+
   setSelectedTree(treeId: string | null) {
     this.selectedTreeId = treeId;
     this.selectedNodeId = null;

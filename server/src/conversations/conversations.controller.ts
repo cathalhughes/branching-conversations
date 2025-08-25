@@ -37,7 +37,10 @@ export class ConversationsController {
   getConversationTree(@Param('treeId') treeId: string) {
     const tree = this.conversationsService.getConversationTree(treeId);
     if (!tree) {
-      throw new HttpException('Conversation tree not found', HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        'Conversation tree not found',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return tree;
   }
@@ -46,16 +49,40 @@ export class ConversationsController {
   deleteConversationTree(@Param('treeId') treeId: string) {
     const success = this.conversationsService.deleteConversationTree(treeId);
     if (!success) {
-      throw new HttpException('Conversation tree not found', HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        'Conversation tree not found',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return { success: true };
   }
 
+  @Put('trees/:treeId')
+  updateTree(
+    @Param('treeId') treeId: string,
+    @Body() updateData: { position?: { x: number; y: number } },
+  ) {
+    const tree = this.conversationsService.updateTree(treeId, updateData);
+    if (!tree) {
+      throw new HttpException(
+        'Conversation tree not found',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return tree;
+  }
+
   @Post('trees/:treeId/nodes')
-  addNode(@Param('treeId') treeId: string, @Body() createNodeDto: CreateNodeDto) {
+  addNode(
+    @Param('treeId') treeId: string,
+    @Body() createNodeDto: CreateNodeDto,
+  ) {
     const node = this.conversationsService.addNode(treeId, createNodeDto);
     if (!node) {
-      throw new HttpException('Conversation tree not found', HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        'Conversation tree not found',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return node;
   }
@@ -66,7 +93,11 @@ export class ConversationsController {
     @Param('nodeId') nodeId: string,
     @Body() updateNodeDto: UpdateNodeDto,
   ) {
-    const node = this.conversationsService.updateNode(treeId, nodeId, updateNodeDto);
+    const node = this.conversationsService.updateNode(
+      treeId,
+      nodeId,
+      updateNodeDto,
+    );
     if (!node) {
       throw new HttpException('Node not found', HttpStatus.NOT_FOUND);
     }
@@ -83,12 +114,18 @@ export class ConversationsController {
   }
 
   @Get('trees/:treeId/nodes/:nodeId/children')
-  getNodeChildren(@Param('treeId') treeId: string, @Param('nodeId') nodeId: string) {
+  getNodeChildren(
+    @Param('treeId') treeId: string,
+    @Param('nodeId') nodeId: string,
+  ) {
     return this.conversationsService.getNodeChildren(treeId, nodeId);
   }
 
   @Get('trees/:treeId/nodes/:nodeId/history')
-  getConversationHistory(@Param('treeId') treeId: string, @Param('nodeId') nodeId: string) {
+  getConversationHistory(
+    @Param('treeId') treeId: string,
+    @Param('nodeId') nodeId: string,
+  ) {
     return this.conversationsService.getConversationHistory(treeId, nodeId);
   }
 
@@ -96,7 +133,10 @@ export class ConversationsController {
   async chat(@Body() chatRequest: ChatRequest) {
     const response = await this.conversationsService.chat(chatRequest);
     if (!response) {
-      throw new HttpException('Failed to process chat request', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Failed to process chat request',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
     return response;
   }
@@ -110,13 +150,17 @@ export class ConversationsController {
     res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
 
     try {
-      for await (const chunk of this.conversationsService.chatStream(chatRequest)) {
+      for await (const chunk of this.conversationsService.chatStream(
+        chatRequest,
+      )) {
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
-      res.write(`data: ${JSON.stringify({ type: 'error', data: { message: 'Stream failed' } })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({ type: 'error', data: { message: 'Stream failed' } })}\n\n`,
+      );
       res.end();
     }
   }

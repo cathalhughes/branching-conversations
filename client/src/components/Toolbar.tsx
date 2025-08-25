@@ -8,7 +8,11 @@ const AI_MODELS = [
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
 ];
 
-const Toolbar = observer(() => {
+interface ToolbarProps {
+  onToggleActivityPanel?: () => void;
+}
+
+const Toolbar = observer(({ onToggleActivityPanel }: ToolbarProps) => {
   const { conversationStore } = useStores();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTreeName, setNewTreeName] = useState('');
@@ -73,6 +77,29 @@ const Toolbar = observer(() => {
         <div className="text-sm text-gray-600">
           Trees: {conversationStore.canvas?.trees.length || 0}
         </div>
+
+        {onToggleActivityPanel && (
+          <button
+            onClick={onToggleActivityPanel}
+            className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+            title="Toggle Activity Panel"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+            <span className="text-sm">Activity</span>
+          </button>
+        )}
       </div>
 
       {showCreateDialog && (
