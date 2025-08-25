@@ -59,6 +59,7 @@ const Canvas = observer(() => {
           data: {
             node: nodeWithStreaming,
             treeId: tree.id,
+            rootNodeId: tree.rootNodeId,
             onSendMessage: async (prompt: string, nodeId: string, model?: string) => {
               try {
                 await conversationStore.sendMessage({
@@ -76,6 +77,13 @@ const Canvas = observer(() => {
                 await conversationStore.addNewNodeBranch(tree.id, parentNodeId);
               } catch (error) {
                 console.error('Failed to add new node:', error);
+              }
+            },
+            onDeleteNode: async (nodeId: string) => {
+              try {
+                await conversationStore.deleteNode(tree.id, nodeId);
+              } catch (error) {
+                console.error('Failed to delete node:', error);
               }
             },
             isLoading: conversationStore.isNodeLoading(node.id),
