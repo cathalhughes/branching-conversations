@@ -67,12 +67,21 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentUser, onProjectSelect, o
       loadUserProjects();
     } catch (error) {
       console.error('Failed to create project:', error);
-      // Fallback to the main canvas if creation fails
-      onProjectSelect('main_canvas');
+      // Show error to user instead of falling back to legacy canvas
+      alert('Failed to create project. Please try again.');
     }
   };
 
   const loadUserProjects = useCallback(async () => {
+    // Ensure current user is set in store before loading projects
+    if (!conversationStore.currentUser) {
+      conversationStore.setCurrentUser({
+        userId: currentUser.userId,
+        userName: currentUser.userName,
+        userEmail: currentUser.userEmail,
+      });
+    }
+    
     setIsLoadingProjects(true);
     try {
       const canvases = await conversationStore.getUserCanvases();
@@ -94,7 +103,7 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentUser, onProjectSelect, o
     } finally {
       setIsLoadingProjects(false);
     }
-  }, [conversationStore]);
+  }, [conversationStore, currentUser]);
 
   // Load user projects when component mounts or user changes
   useEffect(() => {

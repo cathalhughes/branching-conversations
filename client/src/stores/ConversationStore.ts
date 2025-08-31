@@ -19,7 +19,7 @@ class ConversationStore {
 
   constructor() {
     makeAutoObservable(this);
-    this.loadCanvas();
+    // Don't load canvas in constructor - users must select a canvas from CreatePage
   }
 
   setCurrentUser(user: { userId: string; userName: string; userEmail: string }) {
@@ -43,7 +43,7 @@ class ConversationStore {
   async loadCanvas(canvasId?: string) {
     this.setLoading(true);
     try {
-      const endpoint = canvasId && canvasId !== 'main_canvas' 
+      const endpoint = canvasId 
         ? `http://localhost:3001/conversations/canvas/${canvasId}`
         : 'http://localhost:3001/conversations/canvas';
       
@@ -160,10 +160,19 @@ class ConversationStore {
   async createConversationTree(createTreeDto: CreateConversationTreeDto) {
     this.setLoading(true);
     try {
+      if (!this.canvas?.id) {
+        throw new Error('No canvas loaded. Please select a canvas first.');
+      }
+      
+      const requestBody = {
+        ...createTreeDto,
+        canvasId: this.canvas.id
+      };
+      
       const response = await fetch('http://localhost:3001/conversations/trees', {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(createTreeDto),
+        body: JSON.stringify(requestBody),
       });
       
       if (!response.ok) throw new Error('Failed to create conversation tree');
@@ -171,7 +180,7 @@ class ConversationStore {
       const tree = await response.json();
       const newTreeId = tree.id;
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas.id);
       
       runInAction(() => {
         this.selectedTreeId = newTreeId;
@@ -198,7 +207,7 @@ class ConversationStore {
       
       const wasSelected = this.selectedTreeId === treeId;
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         if (wasSelected) {
@@ -277,7 +286,7 @@ class ConversationStore {
       switch (event.type) {
         case 'nodePromptUpdate':
           // Node prompt updated - refresh canvas to show it
-          this.loadCanvas();
+          this.loadCanvas(this.canvas?.id);
           break;
         case 'nodeResponseUpdate':
           // Update streaming response content
@@ -309,7 +318,7 @@ class ConversationStore {
               }
             }
           }
-          this.loadCanvas();
+          this.loadCanvas(this.canvas?.id);
           break;
         case 'error':
           this.error = event.data.message;
@@ -328,7 +337,7 @@ class ConversationStore {
       
       if (!response.ok) throw new Error('Failed to update node position');
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         this.error = null;
@@ -350,7 +359,7 @@ class ConversationStore {
       
       if (!response.ok) throw new Error('Failed to update tree position');
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         this.error = null;
@@ -426,7 +435,7 @@ class ConversationStore {
       if (!response.ok) throw new Error('Failed to create node');
 
       const newNode = await response.json();
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
 
       runInAction(() => {
         this.selectedNodeId = newNode.id;
@@ -474,7 +483,7 @@ class ConversationStore {
       const wasSelectedTree = this.selectedTreeId === treeId;
       
       // Force refresh the canvas to get latest state
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         // If we deleted a root node, the entire tree is gone

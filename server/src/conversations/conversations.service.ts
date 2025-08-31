@@ -55,16 +55,6 @@ export class ConversationsService {
     private collaborationGateway: CollaborationGateway,
   ) {}
 
-  private getDefaultUserId(): string {
-    return (
-      this.configService.get<string>('DEFAULT_USER_ID') ||
-      '60f3b4b4c4c4c4c4c4c4c4c4'
-    );
-  }
-
-  private getDefaultUserName(): string {
-    return this.configService.get<string>('DEFAULT_USER_NAME') || 'Demo User';
-  }
 
   private createObjectIdFromString(str: string): Types.ObjectId {
     // If it's already a valid ObjectId, use it
@@ -82,97 +72,28 @@ export class ConversationsService {
   }
 
   private getCurrentUser(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }) {
-    // Use user from headers if provided, otherwise fall back to default
-    if (userFromHeaders && userFromHeaders.userId && userFromHeaders.userName) {
-      return {
-        userId: userFromHeaders.userId,
-        userName: userFromHeaders.userName,
-      };
+    // Require user from headers
+    if (!userFromHeaders || !userFromHeaders.userId || !userFromHeaders.userName) {
+      throw new Error('User authentication is required. Please provide user headers.');
     }
     
-    // Fallback to default user
     return {
-      userId: this.getDefaultUserId(),
-      userName: this.getDefaultUserName(),
+      userId: userFromHeaders.userId,
+      userName: userFromHeaders.userName,
     };
   }
 
   async getCanvas(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<CanvasType> {
-    // Get or create default canvas
-    let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
-    if (!canvas) {
-      canvas = await this.canvasModel.create({
-        name: 'Main Canvas',
-        ownerId: new Types.ObjectId(this.getDefaultUserId()),
-        totalConversations: 0,
-        totalNodes: 0,
-        lastActivityAt: new Date(),
-        activity: {
-          isBeingEdited: false,
-          currentEditors: [],
-        },
-      });
-    }
-
-    // Get all conversations for this canvas
-    const conversations = await this.conversationModel
-      .find({
-        canvasId: canvas._id,
-        isDeleted: { $ne: true },
-      })
-      .sort({ 'activity.lastEditedAt': -1 });
-
-    // Convert to the expected format
-    const trees: ConversationTree[] = await Promise.all(
-      conversations.map(async (conv) => {
-        const nodes = await this.nodeModel
-          .find({
-            conversationId: conv._id,
-            isDeleted: { $ne: true },
-          })
-          .sort({ depth: 1, branchIndex: 1 });
-
-        return {
-          id: conv._id.toString(),
-          name: conv.name,
-          description: conv.description,
-          nodes: nodes.map((node) => ({
-            id: node._id.toString(),
-            prompt: node.prompt,
-            response: node.response,
-            model: node.aiModel,
-            timestamp: node.createdAt,
-            parentId: node.parentId?.toString(),
-            isGenerating: node.isGenerating,
-            position: node.position,
-          })),
-          rootNodeId: conv.rootNodeId?.toString() || '',
-          createdAt: conv.createdAt,
-          updatedAt: conv.updatedAt,
-          position: conv.position,
-        };
-      }),
-    );
-
-    return {
-      id: canvas._id.toString(),
-      name: canvas.name,
-      trees,
-      createdAt: canvas.createdAt,
-      updatedAt: canvas.updatedAt,
-    };
+    // Return error if no canvas ID is provided - users should select a canvas from CreatePage
+    throw new Error('Canvas ID is required. Please select a canvas from the projects page.');
   }
 
   async createCanvas(
     createCanvasDto: CreateCanvasDto,
     userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
   ): Promise<CanvasType> {
-    const user = userFromHeaders || {
-      userId: this.getDefaultUserId(),
-      userName: this.getDefaultUserName(),
-      userEmail: null,
-    };
-    const ownerId = this.createObjectIdFromString(user.userId || this.getDefaultUserId());
+    const user = this.getCurrentUser(userFromHeaders);
+    const ownerId = this.createObjectIdFromString(user.userId);
     
     // Convert collaborator user IDs to ObjectIds and create collaborator info
     const collaborators = createCanvasDto.collaborators?.map(collab => ({
@@ -206,13 +127,8 @@ export class ConversationsService {
   }
 
   async getUserCanvases(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<any[]> {
-    const user = userFromHeaders || {
-      userId: this.getDefaultUserId(),
-      userName: this.getDefaultUserName(),
-      userEmail: null,
-    };
-    
-    const userId = this.createObjectIdFromString(user.userId || this.getDefaultUserId());
+    const user = this.getCurrentUser(userFromHeaders);
+    const userId = this.createObjectIdFromString(user.userId);
     
     // Find canvases where user is owner or collaborator
     const canvases = await this.canvasModel.find({
@@ -263,20 +179,19 @@ export class ConversationsService {
     return colors[Math.abs(hash) % colors.length];
   }
 
-  async getCanvasByIdOrDefault(canvasId?: string): Promise<CanvasType> {
-    let canvas;
-    
-    if (canvasId && canvasId !== 'main_canvas') {
-      // Try to get specific canvas
-      canvas = await this.canvasModel.findOne({ 
-        _id: this.createObjectIdFromString(canvasId),
-        isDeleted: { $ne: true }
-      });
+  async getCanvasByIdOrDefault(canvasId: string): Promise<CanvasType> {
+    if (!canvasId) {
+      throw new Error('Canvas ID is required. Please select a canvas from the projects page.');
     }
     
-    // Fall back to default canvas behavior
+    // Get specific canvas by ID
+    const canvas = await this.canvasModel.findOne({ 
+      _id: this.createObjectIdFromString(canvasId),
+      isDeleted: { $ne: true }
+    });
+    
     if (!canvas) {
-      return this.getCanvas();
+      throw new Error(`Canvas with ID ${canvasId} not found.`);
     }
 
     // Get all conversations for this canvas
@@ -305,7 +220,7 @@ export class ConversationsService {
             id: node._id.toString(),
             prompt: node.prompt,
             response: node.response,
-            model: node.aiModel || 'system',
+            model: node.aiModel || 'gpt-4.1-nano',
             timestamp: node.createdAt,
             parentId: node.parentId ? node.parentId.toString() : undefined,
             isGenerating: node.isGenerating,
@@ -329,23 +244,17 @@ export class ConversationsService {
   }
 
   async createConversationTree(
-    createTreeDto: CreateConversationTreeDto,
+    createTreeDto: CreateConversationTreeDto & { canvasId: string },
     userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
   ): Promise<ConversationTree> {
-    // Get or create default canvas
-    let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
+    // Get the specified canvas
+    const canvas = await this.canvasModel.findOne({ 
+      _id: this.createObjectIdFromString(createTreeDto.canvasId),
+      isDeleted: { $ne: true }
+    });
+    
     if (!canvas) {
-      canvas = await this.canvasModel.create({
-        name: 'Main Canvas',
-        ownerId: new Types.ObjectId(this.getDefaultUserId()),
-        totalConversations: 0,
-        totalNodes: 0,
-        lastActivityAt: new Date(),
-        activity: {
-          isBeingEdited: false,
-          currentEditors: [],
-        },
-      });
+      throw new Error(`Canvas with ID ${createTreeDto.canvasId} not found.`);
     }
 
     try {
@@ -479,22 +388,18 @@ export class ConversationsService {
       });
 
       // Create the root node
-      const user = userFromHeaders || {
-      userId: this.getDefaultUserId(),
-      userName: this.getDefaultUserName(),
-      userEmail: null,
-    };
+      const user = this.getCurrentUser(userFromHeaders);
       const rootNode = await this.nodeModel.create({
         conversationId: conversation._id,
         canvasId: canvas._id,
         prompt: `Started conversation: ${createTreeDto.name}`,
         response: '',
-        aiModel: 'system',
+        aiModel: 'gpt-4.1-nano',
         position: { x: 0, y: 0 },
         author: {
-          id: this.createObjectIdFromString(user.userId || this.getDefaultUserId()),
-          name: user.userName || 'Unknown User',
-          email: user.userEmail || '',
+          id: this.createObjectIdFromString(user.userId),
+          name: user.userName,
+          email: userFromHeaders?.userEmail || '',
         },
         isGenerating: false,
         isDeleted: false,
@@ -522,7 +427,7 @@ export class ConversationsService {
                 id: rootNode._id.toString(),
                 prompt: rootNode.prompt,
                 response: rootNode.response,
-                model: 'system',
+                model: 'gpt-4.1-nano',
                 timestamp: rootNode.createdAt,
                 parentId: rootNode.parentId?.toString(),
                 isGenerating: rootNode.isGenerating,
@@ -552,7 +457,7 @@ export class ConversationsService {
             id: rootNode._id.toString(),
             prompt: rootNode.prompt,
             response: rootNode.response,
-            model: 'system',
+            model: 'gpt-4.1-nano',
             timestamp: rootNode.createdAt,
             parentId: rootNode.parentId?.toString(),
             isGenerating: rootNode.isGenerating,
@@ -1081,16 +986,21 @@ export class ConversationsService {
       // Add current prompt
       messages.push({ role: 'user', content: chatRequest.prompt });
 
-      const model = chatRequest.model || 'gpt-3.5-turbo';
+      const model = chatRequest.model || '';
+      console.log({ model, messages })
       const result = await streamText({
         model: openai(model),
         messages: messages as any,
       });
 
+      console.log({ result })
+
       let fullText = '';
       for await (const delta of result.textStream) {
+        console.log({ delta })
         fullText += delta;
         node.response = fullText;
+        console.log({ fullText });
         yield {
           type: 'nodeResponseUpdate',
           data: { nodeId: node._id.toString(), response: fullText },

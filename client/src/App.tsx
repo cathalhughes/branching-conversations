@@ -73,7 +73,9 @@ const AppContent = observer(() => {
   };
 
   const handleCanvasRefresh = () => {
-    conversationStore.loadCanvas();
+    if (conversationStore.canvas?.id) {
+      conversationStore.loadCanvas(conversationStore.canvas.id);
+    }
   };
 
   const handleProjectSelect = (projectId: string) => {

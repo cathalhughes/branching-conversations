@@ -54,7 +54,7 @@ export class ConversationsController {
   }
 
   @Post('trees')
-  createConversationTree(@Body() createTreeDto: CreateConversationTreeDto, @Headers() headers: Record<string, string>) {
+  createConversationTree(@Body() createTreeDto: CreateConversationTreeDto & { canvasId: string }, @Headers() headers: Record<string, string>) {
     return this.conversationsService.createConversationTree(createTreeDto, this.extractUserFromHeaders(headers));
   }
 
