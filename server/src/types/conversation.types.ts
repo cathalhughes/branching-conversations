@@ -34,6 +34,17 @@ export interface Canvas {
   updatedAt: Date;
 }
 
+export interface CreateCanvasDto {
+  name: string;
+  description?: string;
+  collaborators?: {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    permissions?: 'read' | 'write' | 'admin';
+  }[];
+}
+
 export interface CreateConversationTreeDto {
   name: string;
   description?: string;

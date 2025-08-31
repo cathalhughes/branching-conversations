@@ -1,12 +1,10 @@
 import { makeAutoObservable, runInAction } from 'mobx';
-import { v4 as uuidv4 } from 'uuid';
 import {
   Canvas,
   ConversationTree,
   ConversationNode,
   CreateConversationTreeDto,
   ChatRequest,
-  ChatResponse,
 } from '../types/conversation.types';
 
 class ConversationStore {
@@ -42,10 +40,14 @@ class ConversationStore {
     return headers;
   }
 
-  async loadCanvas() {
+  async loadCanvas(canvasId?: string) {
     this.setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/conversations/canvas', {
+      const endpoint = canvasId && canvasId !== 'main_canvas' 
+        ? `http://localhost:3001/conversations/canvas/${canvasId}`
+        : 'http://localhost:3001/conversations/canvas';
+      
+      const response = await fetch(endpoint, {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to load canvas');
@@ -74,6 +76,84 @@ class ConversationStore {
       });
     } finally {
       this.setLoading(false);
+    }
+  }
+
+  async createCanvas(projectData: {
+    title: string;
+    description: string;
+    collaborators: Array<{
+      userId: string;
+      userName: string;
+      userEmail: string;
+      color: string;
+    }>;
+  }): Promise<string> {
+    this.setLoading(true);
+    try {
+      const createCanvasDto = {
+        name: projectData.title,
+        description: projectData.description,
+        collaborators: projectData.collaborators.map(collab => ({
+          userId: collab.userId,
+          userEmail: collab.userEmail,
+          userName: collab.userName,
+          permissions: 'write' as const,
+        })),
+      };
+
+      const response = await fetch('http://localhost:3001/conversations/canvas', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(createCanvasDto),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create canvas');
+      }
+
+      const newCanvas = await response.json();
+      
+      runInAction(() => {
+        this.canvas = {
+          ...newCanvas,
+          trees: newCanvas.trees.map((tree: any) => ({
+            ...tree,
+            createdAt: new Date(tree.createdAt),
+            updatedAt: new Date(tree.updatedAt),
+          })),
+          createdAt: new Date(newCanvas.createdAt),
+          updatedAt: new Date(newCanvas.updatedAt),
+        };
+        this.error = null;
+      });
+
+      return newCanvas.id;
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'Unknown error';
+      });
+      throw error;
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  async getUserCanvases(): Promise<any[]> {
+    try {
+      const response = await fetch('http://localhost:3001/conversations/user/canvases', {
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user canvases');
+      }
+
+      const canvases = await response.json();
+      return canvases;
+    } catch (error) {
+      console.error('Error fetching user canvases:', error);
+      return [];
     }
   }
 

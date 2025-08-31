@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStores } from '../contexts/StoreContext';
+import CollaboratorsPanel from './CollaboratorsPanel';
 
 const AI_MODELS = [
   { id: 'gpt-4.1-nano', name: 'GPT-4 Nano' },
@@ -19,14 +20,26 @@ interface ToolbarProps {
   onToggleActivityPanel?: () => void;
   currentUser?: { userId: string; userName: string; userEmail: string; color: string };
   onUserChange?: (user: { userId: string; userName: string; userEmail: string; color: string }) => void;
+  onBackToProjects?: () => void;
 }
 
-const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange }: ToolbarProps) => {
+const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange, onBackToProjects }: ToolbarProps) => {
   const { conversationStore } = useStores();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCollaboratorsPanel, setShowCollaboratorsPanel] = useState(false);
   const [newTreeName, setNewTreeName] = useState('');
   const [newTreeDescription, setNewTreeDescription] = useState('');
   const [selectedModel, setSelectedModel] = useState(AI_MODELS[0].id);
+
+  // Mock collaborators state (in real app, this would come from props or store)
+  const [currentCollaborators, setCurrentCollaborators] = useState([
+    currentUser ? {
+      userId: currentUser.userId,
+      userName: currentUser.userName,
+      userEmail: currentUser.userEmail,
+      color: currentUser.color
+    } : DEMO_USERS[0]
+  ]);
 
   const handleCreateTree = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,9 +62,35 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange }: 
     setShowCreateDialog(false);
   };
 
+  const handleAddCollaborator = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
+    if (!currentCollaborators.some(collab => collab.userId === user.userId)) {
+      setCurrentCollaborators([...currentCollaborators, user]);
+    }
+  };
+
+  const handleRemoveCollaborator = (userId: string) => {
+    if (userId !== currentUser?.userId) { // Don't allow removing the current user
+      setCurrentCollaborators(currentCollaborators.filter(collab => collab.userId !== userId));
+    }
+  };
+
+  const availableUsers = DEMO_USERS;
+
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center space-x-4">
+        {onBackToProjects && (
+          <button
+            onClick={onBackToProjects}
+            className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Projects
+          </button>
+        )}
+        
         <h1 className="text-xl font-semibold text-gray-800">
           Branching Conversations
         </h1>
@@ -61,6 +100,17 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange }: 
           className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
         >
           New Conversation
+        </button>
+
+        <button
+          onClick={() => setShowCollaboratorsPanel(true)}
+          className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+          title="Manage Collaborators"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-.5a4 4 0 110-5.292M21 21v-1a4 4 0 00-3-3.87" />
+          </svg>
+          <span className="text-sm">Collaborators</span>
         </button>
       </div>
 
@@ -188,6 +238,16 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange }: 
             </form>
           </div>
         </div>
+      )}
+
+      {showCollaboratorsPanel && (
+        <CollaboratorsPanel
+          currentCollaborators={currentCollaborators}
+          availableUsers={availableUsers}
+          onAddCollaborator={handleAddCollaborator}
+          onRemoveCollaborator={handleRemoveCollaborator}
+          onClose={() => setShowCollaboratorsPanel(false)}
+        />
       )}
     </div>
   );

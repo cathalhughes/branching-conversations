@@ -5,6 +5,7 @@ import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
 import { ActivityPanel } from './components/ActivityPanel';
 import LandingPage from './components/LandingPage';
+import CreatePage from './components/CreatePage';
 import { Activity } from './types/activity.types';
 
 const DEMO_USERS = [
@@ -20,6 +21,8 @@ const AppContent = observer(() => {
   const [showActivityPanel, setShowActivityPanel] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ userId: string; userName: string; userEmail: string; color: string } | null>(null);
   const [showLandingPage, setShowLandingPage] = useState(true);
+  const [showCreatePage, setShowCreatePage] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // Set initial user in store when user is selected
   React.useEffect(() => {
@@ -55,6 +58,7 @@ const AppContent = observer(() => {
   const handleUserSelect = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
     setCurrentUser(user);
     setShowLandingPage(false);
+    setShowCreatePage(true);
     // The store will be updated via the useEffect above
   };
 
@@ -72,9 +76,39 @@ const AppContent = observer(() => {
     conversationStore.loadCanvas();
   };
 
+  const handleProjectSelect = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setShowCreatePage(false);
+    // Load the specific canvas
+    conversationStore.loadCanvas(projectId);
+  };
+
+  const handleBackToLanding = () => {
+    setCurrentUser(null);
+    setShowLandingPage(true);
+    setShowCreatePage(false);
+    setSelectedProjectId(null);
+  };
+
+  const handleBackToProjects = () => {
+    setShowCreatePage(true);
+    setSelectedProjectId(null);
+  };
+
   // Show landing page if no user is selected
   if (showLandingPage || !currentUser) {
     return <LandingPage onUserSelect={handleUserSelect} />;
+  }
+
+  // Show create page if user is selected but no project is chosen
+  if (showCreatePage && !selectedProjectId) {
+    return (
+      <CreatePage
+        currentUser={currentUser}
+        onProjectSelect={handleProjectSelect}
+        onBackToLanding={handleBackToLanding}
+      />
+    );
   }
 
   return (
@@ -83,6 +117,7 @@ const AppContent = observer(() => {
         onToggleActivityPanel={toggleActivityPanel} 
         currentUser={currentUser}
         onUserChange={handleUserChange}
+        onBackToProjects={handleBackToProjects}
       />
       <div className="flex-1 flex">
         <div className="flex-1">
