@@ -4,6 +4,7 @@ import { StoreProvider, useStores } from './contexts/StoreContext';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
 import { ActivityPanel } from './components/ActivityPanel';
+import LandingPage from './components/LandingPage';
 import { Activity } from './types/activity.types';
 
 const DEMO_USERS = [
@@ -17,16 +18,19 @@ const AppContent = observer(() => {
   const { conversationStore } = useStores();
   const [isActivityPanelExpanded, setIsActivityPanelExpanded] = useState(false);
   const [showActivityPanel, setShowActivityPanel] = useState(true);
-  const [currentUser, setCurrentUser] = useState(DEMO_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<{ userId: string; userName: string; userEmail: string; color: string } | null>(null);
+  const [showLandingPage, setShowLandingPage] = useState(true);
 
-  // Set initial user in store
+  // Set initial user in store when user is selected
   React.useEffect(() => {
-    conversationStore.setCurrentUser({
-      userId: currentUser.userId,
-      userName: currentUser.userName,
-      userEmail: currentUser.userEmail,
-    });
-  }, [currentUser.userId, currentUser.userName, currentUser.userEmail, conversationStore]);
+    if (currentUser) {
+      conversationStore.setCurrentUser({
+        userId: currentUser.userId,
+        userName: currentUser.userName,
+        userEmail: currentUser.userEmail,
+      });
+    }
+  }, [currentUser?.userId, currentUser?.userName, currentUser?.userEmail, conversationStore]);
 
   // Get real canvas ID from the store
   const canvasId = conversationStore.canvas?.id;
@@ -48,6 +52,12 @@ const AppContent = observer(() => {
     setIsActivityPanelExpanded(!isActivityPanelExpanded);
   };
 
+  const handleUserSelect = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
+    setCurrentUser(user);
+    setShowLandingPage(false);
+    // The store will be updated via the useEffect above
+  };
+
   const handleUserChange = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
     setCurrentUser(user);
     // Update the store with the current user
@@ -61,6 +71,11 @@ const AppContent = observer(() => {
   const handleCanvasRefresh = () => {
     conversationStore.loadCanvas();
   };
+
+  // Show landing page if no user is selected
+  if (showLandingPage || !currentUser) {
+    return <LandingPage onUserSelect={handleUserSelect} />;
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
