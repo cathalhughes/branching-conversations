@@ -48,6 +48,18 @@ export class ConversationsController {
     return this.conversationsService.createCanvas(createCanvasDto, this.extractUserFromHeaders(headers));
   }
 
+  @Delete('canvas/:canvasId')
+  async deleteCanvas(@Param('canvasId') canvasId: string, @Headers() headers: Record<string, string>) {
+    const success = await this.conversationsService.deleteCanvas(canvasId, this.extractUserFromHeaders(headers));
+    if (!success) {
+      throw new HttpException(
+        'Canvas not found or permission denied',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { success: true };
+  }
+
   @Get('user/canvases')
   getUserCanvases(@Headers() headers: Record<string, string>) {
     return this.conversationsService.getUserCanvases(this.extractUserFromHeaders(headers));

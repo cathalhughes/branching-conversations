@@ -179,6 +179,61 @@ export class ConversationsService {
     return colors[Math.abs(hash) % colors.length];
   }
 
+  async deleteCanvas(canvasId: string, userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<boolean> {
+    try {
+      const user = this.getCurrentUser(userFromHeaders);
+      const userId = this.createObjectIdFromString(user.userId);
+      
+      // Find the canvas and verify ownership
+      const canvas = await this.canvasModel.findOne({ 
+        _id: this.createObjectIdFromString(canvasId),
+        isDeleted: { $ne: true }
+      });
+      
+      if (!canvas) {
+        return false;
+      }
+      
+      // Check if user is owner
+      if (!canvas.ownerId.equals(userId)) {
+        throw new Error('Only the canvas owner can delete the canvas');
+      }
+
+      // Soft delete the canvas
+      canvas.isDeleted = true;
+      canvas.deletedAt = new Date();
+      await canvas.save();
+
+      // Soft delete all conversations in this canvas
+      const conversations = await this.conversationModel.find({ 
+        canvasId: canvas._id,
+        isDeleted: { $ne: true }
+      });
+
+      for (const conversation of conversations) {
+        conversation.isDeleted = true;
+        conversation.deletedAt = new Date();
+        await conversation.save();
+
+        // Soft delete all nodes in each conversation
+        await this.nodeModel.updateMany(
+          { conversationId: conversation._id },
+          {
+            isDeleted: true,
+            deletedAt: new Date(),
+          }
+        );
+      }
+
+      // Note: We don't log canvas deletion as an activity since it's a high-level
+      // administrative action and the individual conversation/node deletions are already logged
+
+      return true;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   async getCanvasByIdOrDefault(canvasId: string): Promise<CanvasType> {
     if (!canvasId) {
       throw new Error('Canvas ID is required. Please select a canvas from the projects page.');

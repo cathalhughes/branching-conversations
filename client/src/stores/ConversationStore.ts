@@ -157,6 +157,34 @@ class ConversationStore {
     }
   }
 
+  async deleteCanvas(canvasId: string): Promise<void> {
+    try {
+      const response = await fetch(`http://localhost:3001/conversations/canvas/${canvasId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete canvas');
+      }
+
+      // If we're currently viewing the deleted canvas, clear it
+      runInAction(() => {
+        if (this.canvas?.id === canvasId) {
+          this.canvas = null;
+          this.selectedTreeId = null;
+          this.selectedNodeId = null;
+        }
+        this.error = null;
+      });
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'Unknown error';
+      });
+      throw error;
+    }
+  }
+
   async createConversationTree(createTreeDto: CreateConversationTreeDto) {
     this.setLoading(true);
     try {

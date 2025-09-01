@@ -38,6 +38,8 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentUser, onProjectSelect, o
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userProjects, setUserProjects] = useState<Project[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const handleCreateProject = async (projectData: { title: string; description: string; collaborators: User[] }) => {
     console.log('Creating project:', projectData);
@@ -104,6 +106,30 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentUser, onProjectSelect, o
       setIsLoadingProjects(false);
     }
   }, [conversationStore, currentUser]);
+
+  const handleDeleteProject = async (project: Project) => {
+    setProjectToDelete(project);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteProject = async () => {
+    if (!projectToDelete) return;
+    
+    try {
+      await conversationStore.deleteCanvas(projectToDelete.id);
+      await loadUserProjects(); // Refresh the list
+      setShowDeleteConfirm(false);
+      setProjectToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      alert('Failed to delete project. Please try again.');
+    }
+  };
+
+  const cancelDeleteProject = () => {
+    setShowDeleteConfirm(false);
+    setProjectToDelete(null);
+  };
 
   // Load user projects when component mounts or user changes
   useEffect(() => {
@@ -223,11 +249,34 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentUser, onProjectSelect, o
                       {project.description}
                     </p>
                   </div>
-                  {project.isOwner && (
-                    <div className="flex items-center bg-blue-500 bg-opacity-30 text-blue-200 text-xs px-2 py-1 rounded-full">
-                      Owner
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {project.isOwner && (
+                      <>
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.nativeEvent.stopImmediatePropagation();
+                            handleDeleteProject(project);
+                          }}
+                          className="group/delete relative p-2 text-red-400 hover:text-red-300 hover:bg-red-500 hover:bg-opacity-20 rounded-lg transition-all duration-200 z-10"
+                          title="Delete project"
+                          style={{ pointerEvents: 'auto' }}
+                        >
+                          <svg className="w-4 h-4 group-hover/delete:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        <div className="flex items-center bg-blue-500 bg-opacity-30 text-blue-200 text-xs px-2 py-1 rounded-full">
+                          Owner
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Collaborators */}
@@ -281,6 +330,42 @@ const CreatePage: React.FC<CreatePageProps> = ({ currentUser, onProjectSelect, o
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateProject}
         />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && projectToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-600">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-red-500 bg-opacity-20 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-white">Delete Project</h3>
+            </div>
+            
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete <strong>"{projectToDelete.title}"</strong>? 
+              This action cannot be undone and will permanently remove all conversations and data in this canvas.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={cancelDeleteProject}
+                className="px-4 py-2 text-gray-300 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteProject}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete Project
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
