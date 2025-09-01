@@ -43,6 +43,13 @@ const Canvas = observer(() => {
         data: {
           tree,
           onDeleteTree: conversationStore.deleteConversationTree.bind(conversationStore),
+          onAddFirstNode: async (treeId: string) => {
+            try {
+              await conversationStore.addNewNodeBranch(treeId, null);
+            } catch (error) {
+              console.error('Failed to add first node:', error);
+            }
+          },
         },
         draggable: true,
       });
@@ -160,7 +167,7 @@ const Canvas = observer(() => {
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full bg-transparent">
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
@@ -171,8 +178,9 @@ const Canvas = observer(() => {
         nodeTypes={nodeTypes}
         fitView
         attributionPosition="bottom-left"
+        style={{ background: 'transparent' }}
       >
-        <Background />
+        <Background color="#ffffff" size={1} style={{ opacity: 0.1 }} />
         <Controls />
         <MiniMap />
       </ReactFlow>

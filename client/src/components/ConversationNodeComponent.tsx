@@ -205,16 +205,14 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
       </div>
 
       {/* Add New Branch Button */}
-      {hasContent && (
-        <button
-          onClick={handleAddNode}
-          disabled={isGenerating || !node.response}
-          className="w-full text-sm bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          <span>+</span>
-          Add New Branch
-        </button>
-      )}
+      <button
+        onClick={handleAddNode}
+        disabled={isGenerating || !node.response}
+        className="w-full text-sm bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        <span>+</span>
+        Add New Branch
+      </button>
 
       <Handle type="source" position={Position.Bottom} className="w-3 h-3" />
     </div>

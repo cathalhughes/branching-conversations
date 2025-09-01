@@ -6,11 +6,12 @@ import { ConversationTree } from '../types/conversation.types';
 export interface TreeHeaderNodeData {
   tree: ConversationTree;
   onDeleteTree: (treeId: string) => void;
+  onAddFirstNode: (treeId: string) => void;
 }
 
 const TreeHeaderNode = observer((props: NodeProps) => {
   const [isEditing, setIsEditing] = useState(false);
-  const { tree, onDeleteTree } = props.data as any as TreeHeaderNodeData;
+  const { tree, onDeleteTree, onAddFirstNode } = props.data as any as TreeHeaderNodeData;
   const [editName, setEditName] = useState(tree.name);
 
   const handleSave = () => {
@@ -65,6 +66,15 @@ const TreeHeaderNode = observer((props: NodeProps) => {
       <div className="text-xs text-gray-500">
         Nodes: {tree.nodes.length}
       </div>
+
+      {/* Add New Branch Button - always visible to allow multiple root nodes */}
+      <button
+        onClick={() => onAddFirstNode(tree.id)}
+        className="mt-3 w-full text-sm bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 flex items-center justify-center gap-2"
+      >
+        <span>+</span>
+        Add New Branch
+      </button>
 
       <Handle type="source" position={Position.Bottom} className="w-3 h-3" />
     </div>
