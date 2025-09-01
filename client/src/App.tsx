@@ -17,7 +17,6 @@ const DEMO_USERS = [
 
 const AppContent = observer(() => {
   const { conversationStore } = useStores();
-  const [isActivityPanelExpanded, setIsActivityPanelExpanded] = useState(false);
   const [showActivityPanel, setShowActivityPanel] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ userId: string; userName: string; userEmail: string; color: string } | null>(null);
   const [showLandingPage, setShowLandingPage] = useState(true);
@@ -51,9 +50,6 @@ const AppContent = observer(() => {
     setShowActivityPanel(!showActivityPanel);
   };
 
-  const toggleActivityPanelExpanded = () => {
-    setIsActivityPanelExpanded(!isActivityPanelExpanded);
-  };
 
   const handleUserSelect = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
     setCurrentUser(user);
@@ -114,31 +110,35 @@ const AppContent = observer(() => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-40 left-40 w-80 h-80 bg-pink-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob" style={{ animationDelay: '4s' }}></div>
+      </div>
+
       <Toolbar 
         onToggleActivityPanel={toggleActivityPanel} 
+        showActivityPanel={showActivityPanel}
         currentUser={currentUser}
         onUserChange={handleUserChange}
         onBackToProjects={handleBackToProjects}
       />
-      <div className="flex-1 flex">
-        <div className="flex-1">
+      <div className="flex-1 flex relative z-10">
+        <div className="flex-1 border-r border-white border-opacity-10">
           <Canvas />
         </div>
         {showActivityPanel && canvasId && (
           <div
-            className={`
-              border-l border-gray-200 bg-white transition-all duration-300 ease-in-out
-              ${isActivityPanelExpanded ? 'w-96' : 'w-80'}
-            `}
+            className="w-96 border-l border-white border-opacity-10 bg-transparent transition-all duration-500 ease-in-out"
           >
             <ActivityPanel
               canvasId={canvasId}
               userId={currentUser.userId}
               userName={currentUser.userName}
               userEmail={currentUser.userEmail}
-              isExpanded={isActivityPanelExpanded}
-              onToggleExpanded={toggleActivityPanelExpanded}
+              isExpanded={true}
               onNavigateToLocation={handleNavigateToLocation}
               onCanvasRefresh={handleCanvasRefresh}
             />

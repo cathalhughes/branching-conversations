@@ -42,15 +42,15 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ index, style, data }) => {
   if (!activity) {
     return (
       <div style={style} className="px-4 py-3">
-        <div className="border border-gray-200 rounded-xl p-5 animate-pulse">
+        <div className="border border-white border-opacity-10 rounded-xl p-5 animate-pulse bg-white bg-opacity-5 backdrop-blur-sm">
           <div className="flex items-start space-x-4">
-            <div className="w-10 h-10 bg-gray-200 rounded-xl"></div>
+            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-xl"></div>
             <div className="flex-1 space-y-3">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-white bg-opacity-20 rounded w-3/4"></div>
               <div className="flex space-x-2">
-                <div className="h-3 bg-gray-200 rounded w-20"></div>
-                <div className="h-3 bg-gray-200 rounded w-16"></div>
-                <div className="h-3 bg-gray-200 rounded w-12"></div>
+                <div className="h-3 bg-white bg-opacity-20 rounded w-20"></div>
+                <div className="h-3 bg-white bg-opacity-20 rounded w-16"></div>
+                <div className="h-3 bg-white bg-opacity-20 rounded w-12"></div>
               </div>
             </div>
           </div>
@@ -116,23 +116,23 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ index, style, data }) => {
     switch (priority) {
       case ActivityPriority.CRITICAL:
         return {
-          border: 'border-red-500',
-          bg: 'bg-white hover:bg-red-50'
+          border: 'border-red-400',
+          bg: 'bg-red-500 bg-opacity-10 hover:bg-opacity-20'
         };
       case ActivityPriority.HIGH:
         return {
-          border: 'border-orange-500',
-          bg: 'bg-white hover:bg-orange-50'
+          border: 'border-orange-400',
+          bg: 'bg-orange-500 bg-opacity-10 hover:bg-opacity-20'
         };
       case ActivityPriority.MEDIUM:
         return {
-          border: 'border-blue-500',
-          bg: 'bg-white hover:bg-blue-50'
+          border: 'border-blue-400',
+          bg: 'bg-blue-500 bg-opacity-10 hover:bg-opacity-20'
         };
       default:
         return {
-          border: 'border-gray-300',
-          bg: 'bg-white hover:bg-gray-50'
+          border: 'border-white border-opacity-20',
+          bg: 'bg-white bg-opacity-5 hover:bg-opacity-15'
         };
     }
   };
@@ -154,70 +154,34 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ index, style, data }) => {
   const priorityStyles = getPriorityStyles(activity.priority);
 
   return (
-    <div style={style} className="px-2 py-1">
+    <div style={style} className="px-3 py-2">
       <div
-        className={`
-          ${priorityStyles.border} ${priorityStyles.bg}
-          border-l-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors duration-200 group
-        `}
+        className="bg-white bg-opacity-5 backdrop-blur-sm hover:bg-opacity-10 cursor-pointer transition-all duration-200 group border border-white border-opacity-10 rounded-2xl p-4"
         onClick={handleClick}
       >
-        <div className="flex items-start space-x-3 p-3">
+        <div className="flex items-center space-x-4">
           {/* Icon */}
-          <div className={`${iconData.bgColor} p-2 ${iconData.color} bg-opacity-10 group-hover:bg-opacity-20 transition-colors duration-200 flex-shrink-0`}>
-            <div className={iconData.color}>
+          <div className={`${iconData.bgColor} p-3 bg-opacity-20 group-hover:bg-opacity-30 transition-colors duration-200 flex-shrink-0 rounded-xl shadow-lg`}>
+            <div className="text-white">
               {iconData.icon}
             </div>
           </div>
 
           {/* Content */}
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex-1 min-w-0">
             {/* Description */}
-            <div className="flex items-start justify-between">
-              <h4 className="text-sm font-semibold text-gray-900 leading-tight pr-2">
-                {activity.description}
-              </h4>
-              {(activity.conversationId || activity.nodeId) && (
-                <button
-                  onClick={handleNavigate}
-                  className="flex-shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 transition-all duration-200"
-                  title="Navigate to location"
-                >
-                  View
-                </button>
-              )}
-            </div>
+            <h4 className="text-sm font-medium text-white leading-relaxed mb-2">
+              {activity.description}
+            </h4>
 
             {/* Metadata */}
-            <div className="flex items-center flex-wrap gap-2 mt-2">
-              <div className="flex items-center space-x-1">
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full"></div>
-                <span className="text-xs text-gray-600">
-                  {activity.userName}
-                </span>
-              </div>
-              
-              <div className="text-xs text-gray-400">
+            <div className="flex items-center space-x-4 text-xs text-white text-opacity-60">
+              <span className="font-medium text-white text-opacity-80">
+                {activity.userName}
+              </span>
+              <span>
                 {formatDistanceToNow(activity.timestamp)}
-              </div>
-
-              {activity.batchId && (
-                <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 text-xs font-medium">
-                  Batched
-                </span>
-              )}
-
-              {activity.priority !== ActivityPriority.LOW && (
-                <span className={`px-1.5 py-0.5 text-xs font-medium ${
-                  activity.priority === ActivityPriority.CRITICAL
-                    ? 'bg-red-100 text-red-700'
-                    : activity.priority === ActivityPriority.HIGH
-                    ? 'bg-orange-100 text-orange-700'
-                    : 'bg-blue-100 text-blue-700'
-                }`}>
-                  {activity.priority}
-                </span>
-              )}
+              </span>
             </div>
           </div>
         </div>
@@ -239,6 +203,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
 }) => {
   const [filters, setFilters] = useState<ActivityFilter>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [listHeight, setListHeight] = useState(400);
+  const listContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Filter out current user's join notifications
   const filteredActivities = useMemo(() => {
@@ -293,20 +259,54 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   };
 
   const itemCount = hasNextPage ? filteredActivities.length + 1 : filteredActivities.length;
-  const height = isExpanded ? 400 : 200;
-  const itemHeight = isExpanded ? ITEM_HEIGHT : COMPACT_ITEM_HEIGHT;
+  const itemHeight = ITEM_HEIGHT;
+
+  // Calculate actual height for React Window
+  React.useEffect(() => {
+    let rafId: number;
+    let timeoutId: NodeJS.Timeout;
+
+    const updateHeight = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      rafId = requestAnimationFrame(() => {
+        if (listContainerRef.current) {
+          const height = listContainerRef.current.clientHeight;
+          if (height > 0 && height !== listHeight) {
+            setListHeight(height);
+          }
+        }
+      });
+    };
+
+    const debouncedUpdateHeight = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(updateHeight, 100);
+    };
+
+    // Initial height calculation
+    updateHeight();
+    window.addEventListener('resize', debouncedUpdateHeight);
+    
+    return () => {
+      window.removeEventListener('resize', debouncedUpdateHeight);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [showFilters, listHeight]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div className="h-full bg-transparent overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-700 to-purple-700 border-b border-white border-opacity-10 flex-shrink-0">
         <div className="flex items-center space-x-3">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <h3 className="text-base font-bold text-gray-900">
+          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
+          <h3 className="text-base font-bold text-white">
             Activity Feed
           </h3>
           {filteredActivities.length > 0 && (
-            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full">
+            <span className="bg-white bg-opacity-10 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm border border-white border-opacity-20">
               {filteredActivities.length} activities
             </span>
           )}
@@ -316,8 +316,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center space-x-2 text-xs font-medium px-3 py-2 rounded-lg transition-all duration-200 ${
               showFilters 
-                ? 'bg-blue-500 text-white shadow-sm' 
-                : 'text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200'
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' 
+                : 'text-white text-opacity-70 hover:text-white bg-white bg-opacity-10 hover:bg-opacity-20 backdrop-blur-sm border border-white border-opacity-20'
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,10 +330,10 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white">
+        <div className="p-4 border-b border-white border-opacity-10 bg-gradient-to-b from-slate-600 to-purple-600 flex-shrink-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-white mb-2">
                 Activity Type
               </label>
               <select
@@ -343,7 +343,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                     activityTypes: e.target.value ? [e.target.value as ActivityType] : undefined,
                   });
                 }}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full text-sm border border-white border-opacity-20 rounded-lg px-3 py-2 bg-white bg-opacity-10 backdrop-blur-sm text-white focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-colors"
               >
                 <option value="">All types</option>
                 <option value={ActivityType.CONVERSATION_CREATED}>💬 Conversations</option>
@@ -353,7 +353,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-white mb-2">
                 User
               </label>
               <input
@@ -361,14 +361,14 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                 value={filters.userId || ''}
                 onChange={(e) => handleFilterChange({ userId: e.target.value || undefined })}
                 placeholder="Filter by user..."
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full text-sm border border-white border-opacity-20 rounded-lg px-3 py-2 bg-white bg-opacity-10 backdrop-blur-sm text-white placeholder-white placeholder-opacity-50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-colors"
               />
             </div>
           </div>
           <div className="flex justify-end mt-4">
             <button
               onClick={clearFilters}
-              className="flex items-center space-x-2 text-sm font-medium text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+              className="flex items-center space-x-2 text-sm font-medium text-white bg-white bg-opacity-10 hover:bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-lg border border-white border-opacity-20 hover:border-opacity-40 transition-all duration-200 hover:scale-105"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -380,17 +380,17 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
       )}
 
       {/* Activity List */}
-      <div style={{ height }}>
+      <div ref={listContainerRef} className="flex-1 bg-gradient-to-b from-slate-800 to-purple-800">
         {filteredActivities.length === 0 && !isLoading ? (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex items-center justify-center h-full text-white">
             <div className="text-center p-8">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 bg-white bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-white text-opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">No activity yet</h4>
-              <p className="text-xs text-gray-500 max-w-xs">Activity will appear here as users interact with the canvas. Start a conversation or make some edits!</p>
+              <h4 className="text-sm font-semibold text-white mb-2">No activity yet</h4>
+              <p className="text-xs text-white text-opacity-70 max-w-xs">Activity will appear here as users interact with the canvas. Start a conversation or make some edits!</p>
             </div>
           </div>
         ) : (
@@ -403,7 +403,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
               <List
                 ref={ref as any}
                 width="100%"
-                height={height}
+                height={listHeight}
                 itemCount={itemCount}
                 itemSize={itemHeight}
                 itemData={itemData}
@@ -419,9 +419,9 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
       {/* Footer */}
       {isLoading && (
-        <div className="flex items-center justify-center p-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center space-x-3 text-sm text-gray-600">
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-500"></div>
+        <div className="flex items-center justify-center p-4 border-t border-white border-opacity-10 bg-gradient-to-r from-slate-700 to-purple-700 flex-shrink-0">
+          <div className="flex items-center space-x-3 text-sm text-white">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-opacity-30 border-t-blue-400"></div>
             <span className="font-medium">Loading activities...</span>
           </div>
         </div>

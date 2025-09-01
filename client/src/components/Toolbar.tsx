@@ -12,12 +12,13 @@ const DEMO_USERS = [
 
 interface ToolbarProps {
   onToggleActivityPanel?: () => void;
+  showActivityPanel?: boolean;
   currentUser?: { userId: string; userName: string; userEmail: string; color: string };
   onUserChange?: (user: { userId: string; userName: string; userEmail: string; color: string }) => void;
   onBackToProjects?: () => void;
 }
 
-const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange, onBackToProjects }: ToolbarProps) => {
+const Toolbar = observer(({ onToggleActivityPanel, showActivityPanel, currentUser, onUserChange, onBackToProjects }: ToolbarProps) => {
   const { conversationStore } = useStores();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCollaboratorsPanel, setShowCollaboratorsPanel] = useState(false);
@@ -70,48 +71,68 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange, on
   const availableUsers = DEMO_USERS;
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-      <div className="flex items-center space-x-4">
+    <div className="bg-gradient-to-r from-slate-800 via-purple-800 to-slate-800 border-b border-white border-opacity-10 px-6 py-4 flex items-center justify-between">
+      <div className="flex items-center space-x-6">
         {onBackToProjects && (
           <button
             onClick={onBackToProjects}
-            className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+            className="flex items-center text-white text-opacity-70 hover:text-white transition-colors group"
           >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 mr-2 group-hover:translate-x-[-2px] transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Projects
           </button>
         )}
         
-        <h1 className="text-xl font-semibold text-gray-800">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
           Branching Conversations
         </h1>
         
         <button
           onClick={() => setShowCreateDialog(true)}
-          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
         >
           New Conversation
         </button>
 
         <button
           onClick={() => setShowCollaboratorsPanel(true)}
-          className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+          className="flex items-center space-x-2 text-white text-opacity-70 hover:text-white px-3 py-2 rounded-lg bg-white bg-opacity-10 hover:bg-opacity-20 backdrop-blur-sm border border-white border-opacity-20 transition-all duration-200 hover:scale-105"
           title="Manage Collaborators"
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
           <span className="text-sm">Collaborators</span>
         </button>
+
+        {onToggleActivityPanel && (
+          <button
+            onClick={onToggleActivityPanel}
+            className={`flex items-center space-x-2 px-3 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 hover:scale-105 ${
+              showActivityPanel 
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg border-blue-400 border-opacity-50' 
+                : 'text-white text-opacity-70 hover:text-white bg-white bg-opacity-10 hover:bg-opacity-20 border-white border-opacity-20'
+            }`}
+            title={showActivityPanel ? 'Hide Activity Panel' : 'Show Activity Panel'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span className="text-sm">{showActivityPanel ? 'Hide Activity' : 'Show Activity'}</span>
+          </button>
+        )}
       </div>
 
       {showCreateDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 max-w-full mx-4">
-            <h2 className="text-lg font-semibold mb-4">Create New Conversation</h2>
+          <div className="bg-gradient-to-br from-slate-800 to-purple-800 border border-white border-opacity-20 rounded-2xl p-6 w-96 max-w-full mx-4 backdrop-blur-xl shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-6">Create New Conversation</h2>
             
             <form onSubmit={handleCreateTree}>
               <div className="mb-4">
-                <label htmlFor="tree-name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="tree-name" className="block text-sm font-semibold text-white mb-2">
                   Name *
                 </label>
                 <input
@@ -120,13 +141,13 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange, on
                   value={newTreeName}
                   onChange={(e) => setNewTreeName(e.target.value)}
                   placeholder="e.g., Frontend Development"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-white border-opacity-20 rounded-lg px-3 py-2 bg-white bg-opacity-10 backdrop-blur-sm text-white placeholder-white placeholder-opacity-50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
                   required
                 />
               </div>
 
               <div className="mb-6">
-                <label htmlFor="tree-description" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="tree-description" className="block text-sm font-semibold text-white mb-2">
                   Description
                 </label>
                 <textarea
@@ -135,7 +156,7 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange, on
                   onChange={(e) => setNewTreeDescription(e.target.value)}
                   placeholder="Optional description of this conversation topic"
                   rows={3}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-white border-opacity-20 rounded-lg px-3 py-2 bg-white bg-opacity-10 backdrop-blur-sm text-white placeholder-white placeholder-opacity-50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
                 />
               </div>
 
@@ -143,14 +164,14 @@ const Toolbar = observer(({ onToggleActivityPanel, currentUser, onUserChange, on
                 <button
                   type="button"
                   onClick={() => setShowCreateDialog(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  className="px-4 py-2 text-white text-opacity-70 hover:text-white bg-white bg-opacity-10 hover:bg-opacity-20 rounded-lg transition-all duration-200 hover:scale-105"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!newTreeName.trim() || conversationStore.isLoading}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   Create
                 </button>
