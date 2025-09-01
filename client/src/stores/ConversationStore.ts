@@ -357,15 +357,28 @@ class ConversationStore {
 
   async updateNodePosition(treeId: string, nodeId: string, position: { x: number; y: number }) {
     try {
+      // Optimistically update the position locally first
+      runInAction(() => {
+        const tree = this.getTreeById(treeId);
+        if (tree) {
+          const node = tree.nodes.find(n => n.id === nodeId);
+          if (node) {
+            node.position = position;
+          }
+        }
+      });
+
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}`, {
         method: 'PUT',
         headers: this.getHeaders(),
         body: JSON.stringify({ position }),
       });
       
-      if (!response.ok) throw new Error('Failed to update node position');
-      
-      await this.loadCanvas(this.canvas?.id);
+      if (!response.ok) {
+        // Revert the optimistic update by reloading
+        await this.loadCanvas(this.canvas?.id);
+        throw new Error('Failed to update node position');
+      }
       
       runInAction(() => {
         this.error = null;
@@ -379,15 +392,25 @@ class ConversationStore {
 
   async updateTreePosition(treeId: string, position: { x: number; y: number }) {
     try {
+      // Optimistically update the position locally first
+      runInAction(() => {
+        const tree = this.getTreeById(treeId);
+        if (tree) {
+          tree.position = position;
+        }
+      });
+
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}`, {
         method: 'PUT',
         headers: this.getHeaders(),
         body: JSON.stringify({ position }),
       });
       
-      if (!response.ok) throw new Error('Failed to update tree position');
-      
-      await this.loadCanvas(this.canvas?.id);
+      if (!response.ok) {
+        // Revert the optimistic update by reloading
+        await this.loadCanvas(this.canvas?.id);
+        throw new Error('Failed to update tree position');
+      }
       
       runInAction(() => {
         this.error = null;
@@ -437,17 +460,30 @@ class ConversationStore {
     return this.getNodeById(treeId, nodeId);
   }
 
-  async addNewNodeBranch(treeId: string, parentNodeId: string) {
-    const parentNode = this.getNodeById(treeId, parentNodeId);
-    if (!parentNode) return;
-
-    const childrenCount = this.getNodeChildren(treeId, parentNodeId).length;
-    const offsetX = childrenCount * 300;
+  async addNewNodeBranch(treeId: string, parentNodeId: string | null) {
+    let newPosition = { x: 0, y: 150 }; // Default position for first node
     
-    const newPosition = {
-      x: parentNode.position.x + offsetX,
-      y: parentNode.position.y + 150,
-    };
+    if (parentNodeId) {
+      const parentNode = this.getNodeById(treeId, parentNodeId);
+      if (!parentNode) return;
+
+      const childrenCount = this.getNodeChildren(treeId, parentNodeId).length;
+      const offsetX = childrenCount * 300;
+      
+      newPosition = {
+        x: parentNode.position.x + offsetX,
+        y: parentNode.position.y + 150,
+      };
+    } else {
+      // For root node, position it relative to the tree header
+      const tree = this.getTreeById(treeId);
+      if (tree) {
+        newPosition = {
+          x: tree.position.x + 50, // Slightly offset from tree header
+          y: tree.position.y + 200, // Below the tree header
+        };
+      }
+    }
 
     try {
       const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes`, {

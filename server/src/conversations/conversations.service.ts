@@ -329,35 +329,11 @@ export class ConversationsService {
         },
       });
 
-      // Create the root node
-      const rootNode = await this.nodeModel.create({
-        prompt: 'Welcome to your new conversation',
-        response:
-          'This is the start of your conversation tree. Click "Add New Branch" to begin chatting.',
-        conversationId: conversation._id,
-        canvasId: canvas._id,
-        position: {
-          x: createTreeDto.position.x + 50,
-          y: createTreeDto.position.y + 100,
-        },
-        depth: 0,
-        branchIndex: 0,
-        childCount: 0,
-        reactFlowId: `node-${new Types.ObjectId().toString()}`,
-        activity: {
-          isBeingEdited: false,
-          currentEditors: [],
-          lastEditedAt: new Date(),
-        },
-      });
-
-      // Update conversation with root node reference
-      conversation.rootNodeId = rootNode._id;
-      await conversation.save();
+      // Don't create an initial root node - let users create their first node via branching
 
       // Update canvas stats
       await this.canvasModel.findByIdAndUpdate(canvas._id, {
-        $inc: { totalConversations: 1, totalNodes: 1 },
+        $inc: { totalConversations: 1 },
         $set: { lastActivityAt: new Date() },
       });
 
@@ -375,16 +351,8 @@ export class ConversationsService {
         id: conversation._id.toString(),
         name: conversation.name,
         description: conversation.description,
-        nodes: [
-          {
-            id: rootNode._id.toString(),
-            prompt: rootNode.prompt,
-            response: rootNode.response,
-            timestamp: rootNode.createdAt,
-            position: rootNode.position,
-          },
-        ],
-        rootNodeId: rootNode._id.toString(),
+        nodes: [],
+        rootNodeId: '',
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         position: conversation.position,
@@ -396,16 +364,8 @@ export class ConversationsService {
         id: conversation._id.toString(),
         name: conversation.name,
         description: conversation.description,
-        nodes: [
-          {
-            id: rootNode._id.toString(),
-            prompt: rootNode.prompt,
-            response: rootNode.response,
-            timestamp: rootNode.createdAt,
-            position: rootNode.position,
-          },
-        ],
-        rootNodeId: rootNode._id.toString(),
+        nodes: [],
+        rootNodeId: '',
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         position: conversation.position,
@@ -442,32 +402,11 @@ export class ConversationsService {
         allowBranching: true,
       });
 
-      // Create the root node
-      const user = this.getCurrentUser(userFromHeaders);
-      const rootNode = await this.nodeModel.create({
-        conversationId: conversation._id,
-        canvasId: canvas._id,
-        prompt: `Started conversation: ${createTreeDto.name}`,
-        response: '',
-        aiModel: 'gpt-4.1-nano',
-        position: { x: 0, y: 0 },
-        author: {
-          id: this.createObjectIdFromString(user.userId),
-          name: user.userName,
-          email: userFromHeaders?.userEmail || '',
-        },
-        isGenerating: false,
-        isDeleted: false,
-      });
-
-      // Update conversation with root node ID
-      await this.conversationModel.findByIdAndUpdate(conversation._id, {
-        rootNodeId: rootNode._id,
-      });
+      // Don't create an initial root node - let users create their first node via branching
 
       // Update canvas statistics
       await this.canvasModel.findByIdAndUpdate(canvas._id, {
-        $inc: { totalConversations: 1, totalNodes: 1 },
+        $inc: { totalConversations: 1 },
         lastActivityAt: new Date(),
       });
 
@@ -477,25 +416,14 @@ export class ConversationsService {
             id: conversation._id.toString(),
             name: conversation.name,
             description: conversation.description,
-            nodes: [
-              {
-                id: rootNode._id.toString(),
-                prompt: rootNode.prompt,
-                response: rootNode.response,
-                model: 'gpt-4.1-nano',
-                timestamp: rootNode.createdAt,
-                parentId: rootNode.parentId?.toString(),
-                isGenerating: rootNode.isGenerating,
-                position: rootNode.position,
-              },
-            ],
-            rootNodeId: rootNode._id.toString(),
+            nodes: [],
+            rootNodeId: '',
             createdAt: conversation.createdAt,
             updatedAt: conversation.updatedAt,
             position: conversation.position,
           },
         ],
-        rootNodeId: rootNode._id.toString(),
+        rootNodeId: '',
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         position: conversation.position,
@@ -507,19 +435,8 @@ export class ConversationsService {
         id: conversation._id.toString(),
         name: conversation.name,
         description: conversation.description,
-        nodes: [
-          {
-            id: rootNode._id.toString(),
-            prompt: rootNode.prompt,
-            response: rootNode.response,
-            model: 'gpt-4.1-nano',
-            timestamp: rootNode.createdAt,
-            parentId: rootNode.parentId?.toString(),
-            isGenerating: rootNode.isGenerating,
-            position: rootNode.position,
-          },
-        ],
-        rootNodeId: rootNode._id.toString(),
+        nodes: [],
+        rootNodeId: '',
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         position: conversation.position,
@@ -682,6 +599,11 @@ export class ConversationsService {
       if (parentNode) {
         parentNode.childCount += 1;
         await parentNode.save();
+      } else {
+        // If this is the first node (no parent), set it as the root node
+        await this.conversationModel.findByIdAndUpdate(treeId, {
+          rootNodeId: node._id,
+        });
       }
 
       // Update conversation stats
@@ -689,6 +611,12 @@ export class ConversationsService {
         $inc: { nodeCount: 1 },
         $max: { maxDepth: depth },
         $set: { 'activity.lastEditedAt': new Date() },
+      });
+
+      // Update canvas stats
+      await this.canvasModel.findByIdAndUpdate(conversation.canvasId, {
+        $inc: { totalNodes: 1 },
+        $set: { lastActivityAt: new Date() },
       });
 
       // Log activity

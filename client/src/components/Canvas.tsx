@@ -43,6 +43,13 @@ const Canvas = observer(() => {
         data: {
           tree,
           onDeleteTree: conversationStore.deleteConversationTree.bind(conversationStore),
+          onAddFirstNode: async (treeId: string) => {
+            try {
+              await conversationStore.addNewNodeBranch(treeId, null);
+            } catch (error) {
+              console.error('Failed to add first node:', error);
+            }
+          },
         },
         draggable: true,
       });
