@@ -1,12 +1,10 @@
 import { makeAutoObservable, runInAction } from 'mobx';
-import { v4 as uuidv4 } from 'uuid';
 import {
   Canvas,
   ConversationTree,
   ConversationNode,
   CreateConversationTreeDto,
   ChatRequest,
-  ChatResponse,
 } from '../types/conversation.types';
 
 class ConversationStore {
@@ -21,7 +19,7 @@ class ConversationStore {
 
   constructor() {
     makeAutoObservable(this);
-    this.loadCanvas();
+    // Don't load canvas in constructor - users must select a canvas from CreatePage
   }
 
   setCurrentUser(user: { userId: string; userName: string; userEmail: string }) {
@@ -42,10 +40,14 @@ class ConversationStore {
     return headers;
   }
 
-  async loadCanvas() {
+  async loadCanvas(canvasId?: string) {
     this.setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/conversations/canvas', {
+      const endpoint = canvasId 
+        ? `http://localhost:3001/conversations/canvas/${canvasId}`
+        : 'http://localhost:3001/conversations/canvas';
+      
+      const response = await fetch(endpoint, {
         headers: this.getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to load canvas');
@@ -77,13 +79,128 @@ class ConversationStore {
     }
   }
 
+  async createCanvas(projectData: {
+    title: string;
+    description: string;
+    collaborators: Array<{
+      userId: string;
+      userName: string;
+      userEmail: string;
+      color: string;
+    }>;
+  }): Promise<string> {
+    this.setLoading(true);
+    try {
+      const createCanvasDto = {
+        name: projectData.title,
+        description: projectData.description,
+        collaborators: projectData.collaborators.map(collab => ({
+          userId: collab.userId,
+          userEmail: collab.userEmail,
+          userName: collab.userName,
+          permissions: 'write' as const,
+        })),
+      };
+
+      const response = await fetch('http://localhost:3001/conversations/canvas', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(createCanvasDto),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create canvas');
+      }
+
+      const newCanvas = await response.json();
+      
+      runInAction(() => {
+        this.canvas = {
+          ...newCanvas,
+          trees: newCanvas.trees.map((tree: any) => ({
+            ...tree,
+            createdAt: new Date(tree.createdAt),
+            updatedAt: new Date(tree.updatedAt),
+          })),
+          createdAt: new Date(newCanvas.createdAt),
+          updatedAt: new Date(newCanvas.updatedAt),
+        };
+        this.error = null;
+      });
+
+      return newCanvas.id;
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'Unknown error';
+      });
+      throw error;
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  async getUserCanvases(): Promise<any[]> {
+    try {
+      const response = await fetch('http://localhost:3001/conversations/user/canvases', {
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user canvases');
+      }
+
+      const canvases = await response.json();
+      return canvases;
+    } catch (error) {
+      console.error('Error fetching user canvases:', error);
+      return [];
+    }
+  }
+
+  async deleteCanvas(canvasId: string): Promise<void> {
+    try {
+      const response = await fetch(`http://localhost:3001/conversations/canvas/${canvasId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete canvas');
+      }
+
+      // If we're currently viewing the deleted canvas, clear it
+      runInAction(() => {
+        if (this.canvas?.id === canvasId) {
+          this.canvas = null;
+          this.selectedTreeId = null;
+          this.selectedNodeId = null;
+        }
+        this.error = null;
+      });
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'Unknown error';
+      });
+      throw error;
+    }
+  }
+
   async createConversationTree(createTreeDto: CreateConversationTreeDto) {
     this.setLoading(true);
     try {
+      if (!this.canvas?.id) {
+        throw new Error('No canvas loaded. Please select a canvas first.');
+      }
+      
+      const requestBody = {
+        ...createTreeDto,
+        canvasId: this.canvas.id
+      };
+      
       const response = await fetch('http://localhost:3001/conversations/trees', {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(createTreeDto),
+        body: JSON.stringify(requestBody),
       });
       
       if (!response.ok) throw new Error('Failed to create conversation tree');
@@ -91,7 +208,7 @@ class ConversationStore {
       const tree = await response.json();
       const newTreeId = tree.id;
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas.id);
       
       runInAction(() => {
         this.selectedTreeId = newTreeId;
@@ -118,7 +235,7 @@ class ConversationStore {
       
       const wasSelected = this.selectedTreeId === treeId;
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         if (wasSelected) {
@@ -197,7 +314,7 @@ class ConversationStore {
       switch (event.type) {
         case 'nodePromptUpdate':
           // Node prompt updated - refresh canvas to show it
-          this.loadCanvas();
+          this.loadCanvas(this.canvas?.id);
           break;
         case 'nodeResponseUpdate':
           // Update streaming response content
@@ -229,7 +346,7 @@ class ConversationStore {
               }
             }
           }
-          this.loadCanvas();
+          this.loadCanvas(this.canvas?.id);
           break;
         case 'error':
           this.error = event.data.message;
@@ -248,7 +365,7 @@ class ConversationStore {
       
       if (!response.ok) throw new Error('Failed to update node position');
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         this.error = null;
@@ -270,7 +387,7 @@ class ConversationStore {
       
       if (!response.ok) throw new Error('Failed to update tree position');
       
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         this.error = null;
@@ -346,7 +463,7 @@ class ConversationStore {
       if (!response.ok) throw new Error('Failed to create node');
 
       const newNode = await response.json();
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
 
       runInAction(() => {
         this.selectedNodeId = newNode.id;
@@ -394,7 +511,7 @@ class ConversationStore {
       const wasSelectedTree = this.selectedTreeId === treeId;
       
       // Force refresh the canvas to get latest state
-      await this.loadCanvas();
+      await this.loadCanvas(this.canvas?.id);
       
       runInAction(() => {
         // If we deleted a root node, the entire tree is gone

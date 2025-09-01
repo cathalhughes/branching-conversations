@@ -15,16 +15,13 @@ export interface ConversationNodeData {
 
 const ConversationNodeComponent = observer((props: NodeProps) => {
   const [prompt, setPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4');
+  const [selectedModel, setSelectedModel] = useState('gpt-4.1-nano');
   const [isEditing, setIsEditing] = useState(false);
   const [isResponseExpanded, setIsResponseExpanded] = useState(false);
   const { node, treeId, rootNodeId, onSendMessage, onAddNode, onDeleteNode, isLoading } = props.data as any as ConversationNodeData;
 
   const availableModels = [
-    { value: 'gpt-4', label: 'GPT-4' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-    { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-    { value: 'claude-3-haiku', label: 'Claude 3 Haiku' },
+    { value: 'gpt-4.1-nano', label: 'gpt-4.1-nano' },
   ];
 
   // Initialize prompt and model from node if they exist

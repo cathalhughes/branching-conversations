@@ -11,7 +11,7 @@ export class AppService {
   async testAI(message: string) {
     try {
       const { text } = await generateText({
-        model: openai('gpt-4.1-nano'),
+        model: openai('gpt-4.1-nano.1-nano'),
         prompt: `You are a helpful assistant. Respond to: ${message}`,
       });
 

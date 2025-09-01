@@ -18,6 +18,7 @@ import {
   CreateNodeDto,
   UpdateNodeDto,
   ChatRequest,
+  CreateCanvasDto,
 } from '../types/conversation.types';
 
 @Controller('conversations')
@@ -37,9 +38,45 @@ export class ConversationsController {
     return this.conversationsService.getCanvas(this.extractUserFromHeaders(headers));
   }
 
+  @Get('canvas/:canvasId')
+  getCanvasById(@Param('canvasId') canvasId: string, @Headers() headers: Record<string, string>) {
+    return this.conversationsService.getCanvasByIdOrDefault(canvasId);
+  }
+
+  @Post('canvas')
+  createCanvas(@Body() createCanvasDto: CreateCanvasDto, @Headers() headers: Record<string, string>) {
+    return this.conversationsService.createCanvas(createCanvasDto, this.extractUserFromHeaders(headers));
+  }
+
+  @Delete('canvas/:canvasId')
+  async deleteCanvas(@Param('canvasId') canvasId: string, @Headers() headers: Record<string, string>) {
+    const success = await this.conversationsService.deleteCanvas(canvasId, this.extractUserFromHeaders(headers));
+    if (!success) {
+      throw new HttpException(
+        'Canvas not found or permission denied',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { success: true };
+  }
+
+  @Get('user/canvases')
+  getUserCanvases(@Headers() headers: Record<string, string>) {
+    return this.conversationsService.getUserCanvases(this.extractUserFromHeaders(headers));
+  }
+
   @Post('trees')
-  createConversationTree(@Body() createTreeDto: CreateConversationTreeDto, @Headers() headers: Record<string, string>) {
+  createConversationTree(@Body() createTreeDto: CreateConversationTreeDto & { canvasId: string }, @Headers() headers: Record<string, string>) {
     return this.conversationsService.createConversationTree(createTreeDto, this.extractUserFromHeaders(headers));
+  }
+
+  @Post('canvas/:canvasId/trees')
+  createConversationTreeInCanvas(
+    @Param('canvasId') canvasId: string, 
+    @Body() createTreeDto: CreateConversationTreeDto, 
+    @Headers() headers: Record<string, string>
+  ) {
+    return this.conversationsService.createConversationTreeInCanvas(canvasId, createTreeDto, this.extractUserFromHeaders(headers));
   }
 
   @Get('trees/:treeId')

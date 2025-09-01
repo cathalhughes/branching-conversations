@@ -36,6 +36,7 @@ import {
   UpdateNodeDto,
   ChatRequest,
   ChatResponse,
+  CreateCanvasDto,
 } from '../types/conversation.types';
 
 @Injectable()
@@ -54,48 +55,198 @@ export class ConversationsService {
     private collaborationGateway: CollaborationGateway,
   ) {}
 
-  private getDefaultUserId(): string {
-    return (
-      this.configService.get<string>('DEFAULT_USER_ID') ||
-      '60f3b4b4c4c4c4c4c4c4c4c4'
-    );
-  }
 
-  private getDefaultUserName(): string {
-    return this.configService.get<string>('DEFAULT_USER_NAME') || 'Demo User';
+  private createObjectIdFromString(str: string): Types.ObjectId {
+    // If it's already a valid ObjectId, use it
+    if (Types.ObjectId.isValid(str)) {
+      return new Types.ObjectId(str);
+    }
+    
+    // Otherwise, create a deterministic ObjectId from the string
+    // We'll use the first 24 characters of the hex representation of the string hash
+    const crypto = require('crypto');
+    const hash = crypto.createHash('md5').update(str).digest('hex');
+    // Take first 24 characters to make a valid ObjectId
+    const objectIdString = hash.substring(0, 24);
+    return new Types.ObjectId(objectIdString);
   }
 
   private getCurrentUser(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }) {
-    // Use user from headers if provided, otherwise fall back to default
-    if (userFromHeaders && userFromHeaders.userId && userFromHeaders.userName) {
-      return {
-        userId: userFromHeaders.userId,
-        userName: userFromHeaders.userName,
-      };
+    // Require user from headers
+    if (!userFromHeaders || !userFromHeaders.userId || !userFromHeaders.userName) {
+      throw new Error('User authentication is required. Please provide user headers.');
     }
     
-    // Fallback to default user
     return {
-      userId: this.getDefaultUserId(),
-      userName: this.getDefaultUserName(),
+      userId: userFromHeaders.userId,
+      userName: userFromHeaders.userName,
     };
   }
 
   async getCanvas(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<CanvasType> {
-    // Get or create default canvas
-    let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
-    if (!canvas) {
-      canvas = await this.canvasModel.create({
-        name: 'Main Canvas',
-        ownerId: new Types.ObjectId(this.getDefaultUserId()),
-        totalConversations: 0,
-        totalNodes: 0,
-        lastActivityAt: new Date(),
-        activity: {
-          isBeingEdited: false,
-          currentEditors: [],
-        },
+    // Return error if no canvas ID is provided - users should select a canvas from CreatePage
+    throw new Error('Canvas ID is required. Please select a canvas from the projects page.');
+  }
+
+  async createCanvas(
+    createCanvasDto: CreateCanvasDto,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
+  ): Promise<CanvasType> {
+    const user = this.getCurrentUser(userFromHeaders);
+    const ownerId = this.createObjectIdFromString(user.userId);
+    
+    // Convert collaborator user IDs to ObjectIds and create collaborator info
+    const collaborators = createCanvasDto.collaborators?.map(collab => ({
+      userId: this.createObjectIdFromString(collab.userId),
+      permissions: collab.permissions || 'write' as 'read' | 'write' | 'admin',
+      joinedAt: new Date(),
+    })) || [];
+
+    // Create the new canvas
+    const canvas = await this.canvasModel.create({
+      name: createCanvasDto.name.trim(),
+      description: createCanvasDto.description?.trim(),
+      ownerId,
+      collaborators,
+      totalConversations: 0,
+      totalNodes: 0,
+      lastActivityAt: new Date(),
+      activity: {
+        isBeingEdited: false,
+        currentEditors: [],
+      },
+    });
+
+    return {
+      id: canvas._id.toString(),
+      name: canvas.name,
+      trees: [], // New canvas starts with no conversations
+      createdAt: canvas.createdAt,
+      updatedAt: canvas.updatedAt,
+    };
+  }
+
+  async getUserCanvases(userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<any[]> {
+    const user = this.getCurrentUser(userFromHeaders);
+    const userId = this.createObjectIdFromString(user.userId);
+    
+    // Find canvases where user is owner or collaborator
+    const canvases = await this.canvasModel.find({
+      $or: [
+        { ownerId: userId },
+        { 'collaborators.userId': userId }
+      ],
+      isDeleted: { $ne: true }
+    }).sort({ lastActivityAt: -1 });
+
+    // Transform canvases to project format
+    return canvases.map(canvas => ({
+      id: canvas._id.toString(),
+      title: canvas.name,
+      description: canvas.description || '',
+      createdAt: canvas.createdAt.toISOString().split('T')[0], // Format as YYYY-MM-DD
+      lastActivity: this.getRelativeTime(canvas.lastActivityAt),
+      isOwner: canvas.ownerId.equals(userId),
+      collaborators: canvas.collaborators.map(collab => ({
+        userId: collab.userId.toString(),
+        userName: 'Collaborator', // We don't store full user info, so placeholder
+        userEmail: '',
+        color: this.getColorForUserId(collab.userId.toString()),
+        permissions: collab.permissions
+      }))
+    }));
+  }
+
+  private getRelativeTime(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffHours < 1) return 'Less than an hour ago';
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  }
+
+  private getColorForUserId(userId: string): string {
+    // Simple hash-based color assignment
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  async deleteCanvas(canvasId: string, userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null }): Promise<boolean> {
+    try {
+      const user = this.getCurrentUser(userFromHeaders);
+      const userId = this.createObjectIdFromString(user.userId);
+      
+      // Find the canvas and verify ownership
+      const canvas = await this.canvasModel.findOne({ 
+        _id: this.createObjectIdFromString(canvasId),
+        isDeleted: { $ne: true }
       });
+      
+      if (!canvas) {
+        return false;
+      }
+      
+      // Check if user is owner
+      if (!canvas.ownerId.equals(userId)) {
+        throw new Error('Only the canvas owner can delete the canvas');
+      }
+
+      // Soft delete the canvas
+      canvas.isDeleted = true;
+      canvas.deletedAt = new Date();
+      await canvas.save();
+
+      // Soft delete all conversations in this canvas
+      const conversations = await this.conversationModel.find({ 
+        canvasId: canvas._id,
+        isDeleted: { $ne: true }
+      });
+
+      for (const conversation of conversations) {
+        conversation.isDeleted = true;
+        conversation.deletedAt = new Date();
+        await conversation.save();
+
+        // Soft delete all nodes in each conversation
+        await this.nodeModel.updateMany(
+          { conversationId: conversation._id },
+          {
+            isDeleted: true,
+            deletedAt: new Date(),
+          }
+        );
+      }
+
+      // Note: We don't log canvas deletion as an activity since it's a high-level
+      // administrative action and the individual conversation/node deletions are already logged
+
+      return true;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getCanvasByIdOrDefault(canvasId: string): Promise<CanvasType> {
+    if (!canvasId) {
+      throw new Error('Canvas ID is required. Please select a canvas from the projects page.');
+    }
+    
+    // Get specific canvas by ID
+    const canvas = await this.canvasModel.findOne({ 
+      _id: this.createObjectIdFromString(canvasId),
+      isDeleted: { $ne: true }
+    });
+    
+    if (!canvas) {
+      throw new Error(`Canvas with ID ${canvasId} not found.`);
     }
 
     // Get all conversations for this canvas
@@ -114,23 +265,23 @@ export class ConversationsService {
             conversationId: conv._id,
             isDeleted: { $ne: true },
           })
-          .sort({ depth: 1, branchIndex: 1 });
+          .sort({ createdAt: 1 });
 
         return {
           id: conv._id.toString(),
           name: conv.name,
           description: conv.description,
-          nodes: nodes.map((node) => ({
+          nodes: nodes.map(node => ({
             id: node._id.toString(),
             prompt: node.prompt,
             response: node.response,
-            model: node.aiModel,
+            model: node.aiModel || 'gpt-4.1-nano',
             timestamp: node.createdAt,
-            parentId: node.parentId?.toString(),
+            parentId: node.parentId ? node.parentId.toString() : undefined,
             isGenerating: node.isGenerating,
             position: node.position,
           })),
-          rootNodeId: conv.rootNodeId?.toString() || '',
+          rootNodeId: conv.rootNodeId ? conv.rootNodeId.toString() : '',
           createdAt: conv.createdAt,
           updatedAt: conv.updatedAt,
           position: conv.position,
@@ -148,23 +299,17 @@ export class ConversationsService {
   }
 
   async createConversationTree(
-    createTreeDto: CreateConversationTreeDto,
+    createTreeDto: CreateConversationTreeDto & { canvasId: string },
     userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
   ): Promise<ConversationTree> {
-    // Get or create default canvas
-    let canvas = await this.canvasModel.findOne({ name: 'Main Canvas' });
+    // Get the specified canvas
+    const canvas = await this.canvasModel.findOne({ 
+      _id: this.createObjectIdFromString(createTreeDto.canvasId),
+      isDeleted: { $ne: true }
+    });
+    
     if (!canvas) {
-      canvas = await this.canvasModel.create({
-        name: 'Main Canvas',
-        ownerId: new Types.ObjectId(this.getDefaultUserId()),
-        totalConversations: 0,
-        totalNodes: 0,
-        lastActivityAt: new Date(),
-        activity: {
-          isBeingEdited: false,
-          currentEditors: [],
-        },
-      });
+      throw new Error(`Canvas with ID ${createTreeDto.canvasId} not found.`);
     }
 
     try {
@@ -257,6 +402,120 @@ export class ConversationsService {
             prompt: rootNode.prompt,
             response: rootNode.response,
             timestamp: rootNode.createdAt,
+            position: rootNode.position,
+          },
+        ],
+        rootNodeId: rootNode._id.toString(),
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        position: conversation.position,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async createConversationTreeInCanvas(
+    canvasId: string,
+    createTreeDto: CreateConversationTreeDto,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
+  ): Promise<ConversationTree> {
+    // Find the specific canvas
+    const canvas = await this.canvasModel.findOne({ 
+      _id: this.createObjectIdFromString(canvasId),
+      isDeleted: { $ne: true }
+    });
+    
+    if (!canvas) {
+      throw new Error(`Canvas with ID ${canvasId} not found`);
+    }
+
+    try {
+      // Create the conversation
+      const conversation = await this.conversationModel.create({
+        name: createTreeDto.name,
+        description: createTreeDto.description,
+        canvasId: canvas._id,
+        position: createTreeDto.position,
+        nodeCount: 1,
+        maxDepth: 0,
+        allowBranching: true,
+      });
+
+      // Create the root node
+      const user = this.getCurrentUser(userFromHeaders);
+      const rootNode = await this.nodeModel.create({
+        conversationId: conversation._id,
+        canvasId: canvas._id,
+        prompt: `Started conversation: ${createTreeDto.name}`,
+        response: '',
+        aiModel: 'gpt-4.1-nano',
+        position: { x: 0, y: 0 },
+        author: {
+          id: this.createObjectIdFromString(user.userId),
+          name: user.userName,
+          email: userFromHeaders?.userEmail || '',
+        },
+        isGenerating: false,
+        isDeleted: false,
+      });
+
+      // Update conversation with root node ID
+      await this.conversationModel.findByIdAndUpdate(conversation._id, {
+        rootNodeId: rootNode._id,
+      });
+
+      // Update canvas statistics
+      await this.canvasModel.findByIdAndUpdate(canvas._id, {
+        $inc: { totalConversations: 1, totalNodes: 1 },
+        lastActivityAt: new Date(),
+      });
+
+      const treeResult = {
+        trees: [
+          {
+            id: conversation._id.toString(),
+            name: conversation.name,
+            description: conversation.description,
+            nodes: [
+              {
+                id: rootNode._id.toString(),
+                prompt: rootNode.prompt,
+                response: rootNode.response,
+                model: 'gpt-4.1-nano',
+                timestamp: rootNode.createdAt,
+                parentId: rootNode.parentId?.toString(),
+                isGenerating: rootNode.isGenerating,
+                position: rootNode.position,
+              },
+            ],
+            rootNodeId: rootNode._id.toString(),
+            createdAt: conversation.createdAt,
+            updatedAt: conversation.updatedAt,
+            position: conversation.position,
+          },
+        ],
+        rootNodeId: rootNode._id.toString(),
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        position: conversation.position,
+      };
+      await this.collaborationGateway.broadcastTreeCreated(canvas._id.toString(), treeResult);
+
+      // Return in expected format
+      return {
+        id: conversation._id.toString(),
+        name: conversation.name,
+        description: conversation.description,
+        nodes: [
+          {
+            id: rootNode._id.toString(),
+            prompt: rootNode.prompt,
+            response: rootNode.response,
+            model: 'gpt-4.1-nano',
+            timestamp: rootNode.createdAt,
+            parentId: rootNode.parentId?.toString(),
+            isGenerating: rootNode.isGenerating,
             position: rootNode.position,
           },
         ],
@@ -782,16 +1041,21 @@ export class ConversationsService {
       // Add current prompt
       messages.push({ role: 'user', content: chatRequest.prompt });
 
-      const model = chatRequest.model || 'gpt-3.5-turbo';
+      const model = chatRequest.model || '';
+      console.log({ model, messages })
       const result = await streamText({
         model: openai(model),
         messages: messages as any,
       });
 
+      console.log({ result })
+
       let fullText = '';
       for await (const delta of result.textStream) {
+        console.log({ delta })
         fullText += delta;
         node.response = fullText;
+        console.log({ fullText });
         yield {
           type: 'nodeResponseUpdate',
           data: { nodeId: node._id.toString(), response: fullText },
