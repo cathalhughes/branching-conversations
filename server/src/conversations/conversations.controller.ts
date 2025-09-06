@@ -10,7 +10,10 @@ import {
   HttpStatus,
   Res,
   Headers,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ConversationsService } from './conversations.service';
 import {
@@ -213,5 +216,71 @@ export class ConversationsController {
       );
       res.end();
     }
+  }
+
+  @Post('trees/:treeId/nodes/:nodeId/files')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @Param('treeId') treeId: string,
+    @Param('nodeId') nodeId: string,
+    @UploadedFile() file: any,
+    @Headers() headers: Record<string, string>,
+  ) {
+    if (!file) {
+      throw new HttpException('No file provided', HttpStatus.BAD_REQUEST);
+    }
+
+    const node = await this.conversationsService.uploadFileToNode(
+      treeId,
+      nodeId,
+      file.buffer,
+      file.filename || `upload_${Date.now()}`,
+      file.mimetype,
+      file.originalname,
+      this.extractUserFromHeaders(headers),
+    );
+
+    if (!node) {
+      throw new HttpException('Node not found', HttpStatus.NOT_FOUND);
+    }
+
+    return node;
+  }
+
+  @Get('trees/:treeId/nodes/:nodeId/files')
+  async getNodeFiles(
+    @Param('treeId') treeId: string,
+    @Param('nodeId') nodeId: string,
+  ) {
+    const node = await this.conversationsService.getNodeWithInheritedFiles(treeId, nodeId);
+    if (!node) {
+      throw new HttpException('Node not found', HttpStatus.NOT_FOUND);
+    }
+
+    return {
+      nodeId,
+      attachments: node.attachments || [],
+    };
+  }
+
+  @Delete('trees/:treeId/nodes/:nodeId/files/:attachmentId')
+  async deleteFile(
+    @Param('treeId') treeId: string,
+    @Param('nodeId') nodeId: string,
+    @Param('attachmentId') attachmentId: string,
+    @Headers() headers: Record<string, string>,
+  ) {
+    const node = await this.conversationsService.deleteFileFromNode(
+      treeId,
+      nodeId,
+      attachmentId,
+      this.extractUserFromHeaders(headers),
+    );
+
+    if (!node) {
+      throw new HttpException('Node or file not found', HttpStatus.NOT_FOUND);
+    }
+
+    return { success: true };
   }
 }

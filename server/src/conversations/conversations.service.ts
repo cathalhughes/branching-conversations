@@ -12,6 +12,7 @@ import { openai } from '@ai-sdk/openai';
 import { generateText, streamText } from 'ai';
 import { ActivityService } from './activity.service';
 import { CollaborationGateway } from './collaboration.gateway';
+import { FileService } from '../services/file.service';
 
 import { Canvas, CanvasModel } from '../schemas/canvas.schema';
 import {
@@ -53,6 +54,7 @@ export class ConversationsService {
     private activityService: ActivityService,
     @Inject(forwardRef(() => CollaborationGateway))
     private collaborationGateway: CollaborationGateway,
+    private fileService: FileService,
   ) {}
 
 
@@ -879,12 +881,33 @@ export class ConversationsService {
       node.aiModel = chatRequest.model;
       await node.save();
 
+      // Get conversation history with file attachments
       const history = await this.getConversationHistory(
         chatRequest.treeId,
         node._id.toString(),
       );
+      
+      // Get current node with inherited files for context
+      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
         [];
+
+      // Build file context from all available attachments
+      let fileContext = '';
+      if (nodeWithFiles && nodeWithFiles.attachments && nodeWithFiles.attachments.length > 0) {
+        const contextFiles = nodeWithFiles.attachments.filter(att => att.textContent);
+        if (contextFiles.length > 0) {
+          fileContext = '\n\nFile Context:\n';
+          contextFiles.forEach(attachment => {
+            fileContext += `--- ${attachment.originalName} ---\n`;
+            fileContext += attachment.textContent + '\n\n';
+          });
+        }
+      }
 
       // Add conversation history
       history.forEach((historyNode) => {
@@ -894,8 +917,12 @@ export class ConversationsService {
         }
       });
 
-      // Add current prompt
-      messages.push({ role: 'user', content: chatRequest.prompt });
+      // Add current prompt with file context
+      const promptWithContext = fileContext 
+        ? chatRequest.prompt + fileContext
+        : chatRequest.prompt;
+      
+      messages.push({ role: 'user', content: promptWithContext });
 
       const model = chatRequest.model || 'gpt-3.5-turbo';
       const { text } = await generateText({
@@ -951,12 +978,35 @@ export class ConversationsService {
         },
       };
 
+      // Get conversation history with file attachments
       const history = await this.getConversationHistory(
         chatRequest.treeId,
         node._id.toString(),
       );
+      
+      // Get current node with inherited files for context
+      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+
+      console.log({ nodeWithFiles })
+
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
         [];
+
+      // Build file context from all available attachments
+      let fileContext = '';
+      if (nodeWithFiles && nodeWithFiles.attachments && nodeWithFiles.attachments.length > 0) {
+        const contextFiles = nodeWithFiles.attachments.filter(att => att.textContent);
+        if (contextFiles.length > 0) {
+          fileContext = '\n\nFile Context:\n';
+          contextFiles.forEach(attachment => {
+            fileContext += `--- ${attachment.originalName} ---\n`;
+            fileContext += attachment.textContent + '\n\n';
+          });
+        }
+      }
 
       // Add conversation history
       history.forEach((historyNode) => {
@@ -966,24 +1016,23 @@ export class ConversationsService {
         }
       });
 
-      // Add current prompt
-      messages.push({ role: 'user', content: chatRequest.prompt });
+      // Add current prompt with file context
+      const promptWithContext = fileContext 
+        ? chatRequest.prompt + fileContext
+        : chatRequest.prompt;
+      
+      messages.push({ role: 'user', content: promptWithContext });
 
       const model = chatRequest.model || '';
-      console.log({ model, messages })
       const result = await streamText({
         model: openai(model),
         messages: messages as any,
       });
 
-      console.log({ result })
-
       let fullText = '';
       for await (const delta of result.textStream) {
-        console.log({ delta })
         fullText += delta;
         node.response = fullText;
-        console.log({ fullText });
         yield {
           type: 'nodeResponseUpdate',
           data: { nodeId: node._id.toString(), response: fullText },
@@ -1011,6 +1060,191 @@ export class ConversationsService {
       node.isGenerating = false;
       await node.save();
       yield { type: 'error', data: { message: 'Failed to generate response' } };
+    }
+  }
+
+  async uploadFileToNode(
+    treeId: string,
+    nodeId: string,
+    file: Buffer,
+    filename: string,
+    mimeType: string,
+    originalName: string,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
+  ): Promise<ConversationNodeType | null> {
+    const node = await this.nodeModel.findById(nodeId);
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
+      return null;
+    }
+
+    try {
+      const user = this.getCurrentUser(userFromHeaders);
+      
+      // Upload file using FileService
+      const attachment = await this.fileService.uploadFile(
+        file,
+        filename,
+        mimeType,
+        originalName,
+        user.userId,
+      );
+
+      // Add attachment to node
+      node.attachments = node.attachments || [];
+      node.attachments.push(attachment);
+      await node.save();
+
+      // Log activity
+      await this.activityService.logActivity({
+        canvasId: node.canvasId.toString(),
+        conversationId: treeId,
+        nodeId: nodeId,
+        userId: user.userId,
+        userName: user.userName,
+        activityType: 'file_uploaded' as any,
+        description: `${user.userName} uploaded file: ${originalName}`,
+      });
+
+      // Return updated node
+      return {
+        id: node._id.toString(),
+        prompt: node.prompt,
+        response: node.response,
+        model: node.aiModel,
+        timestamp: node.createdAt,
+        parentId: node.parentId?.toString(),
+        isGenerating: node.isGenerating,
+        position: node.position,
+        attachments: node.attachments as any,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getNodeWithInheritedFiles(
+    treeId: string,
+    nodeId: string,
+  ): Promise<ConversationNodeType | null> {
+    const node = await this.nodeModel.findById(nodeId);
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
+      return null;
+    }
+
+    // Get all nodes in the conversation for hierarchy building
+    const allNodes = await this.nodeModel
+      .find({
+        conversationId: treeId,
+        isDeleted: { $ne: true },
+      })
+      .select('_id parentId attachments');
+
+    // Build node hierarchy and attachments map
+    const nodeHierarchy = new Map<string, string>();
+    const nodeAttachments = new Map<string, any[]>();
+
+    allNodes.forEach(n => {
+      if (n.parentId) {
+        nodeHierarchy.set(n._id.toString(), n.parentId.toString());
+      }
+      if (n.attachments && n.attachments.length > 0) {
+        nodeAttachments.set(n._id.toString(), n.attachments);
+      }
+    });
+
+    // Get inherited files
+    const inheritedFiles = await this.fileService.getInheritedAttachments(
+      nodeId,
+      nodeAttachments,
+      nodeHierarchy,
+    );
+
+    // Combine direct attachments with inherited ones
+    const allAttachments = [
+      ...(node.attachments || []),
+      ...inheritedFiles,
+    ];
+
+    return {
+      id: node._id.toString(),
+      prompt: node.prompt,
+      response: node.response,
+      model: node.aiModel,
+      timestamp: node.createdAt,
+      parentId: node.parentId?.toString(),
+      isGenerating: node.isGenerating,
+      position: node.position,
+      attachments: allAttachments as any,
+    };
+  }
+
+  async deleteFileFromNode(
+    treeId: string,
+    nodeId: string,
+    attachmentId: string,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
+  ): Promise<ConversationNodeType | null> {
+    const node = await this.nodeModel.findById(nodeId);
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
+      return null;
+    }
+
+    try {
+      // Find and remove the attachment
+      const attachmentIndex = node.attachments?.findIndex(
+        att => att.id === attachmentId
+      );
+
+      if (attachmentIndex === -1 || !node.attachments) {
+        return null;
+      }
+
+      const attachment = node.attachments[attachmentIndex];
+      
+      // Delete from GridFS
+      await this.fileService.deleteTextFile(new Types.ObjectId(attachment.gridFSFileId));
+
+      // Remove from node
+      node.attachments.splice(attachmentIndex, 1);
+      await node.save();
+
+      // Log activity
+      const user = this.getCurrentUser(userFromHeaders);
+      await this.activityService.logActivity({
+        canvasId: node.canvasId.toString(),
+        conversationId: treeId,
+        nodeId: nodeId,
+        userId: user.userId,
+        userName: user.userName,
+        activityType: 'file_deleted' as any,
+        description: `${user.userName} deleted file: ${attachment.originalName}`,
+      });
+
+      return {
+        id: node._id.toString(),
+        prompt: node.prompt,
+        response: node.response,
+        model: node.aiModel,
+        timestamp: node.createdAt,
+        parentId: node.parentId?.toString(),
+        isGenerating: node.isGenerating,
+        position: node.position,
+        attachments: node.attachments as any,
+      };
+    } catch (error) {
+      throw error;
     }
   }
 }

@@ -6,6 +6,7 @@ import {
   ActivityInfo,
   Position,
 } from './conversation-mongo.types';
+import { FileAttachment, FileAttachmentSchema } from './file-attachment.schema';
 
 @Schema({ _id: false })
 export class NodePosition {
@@ -92,6 +93,10 @@ export class ConversationNode {
   // Activity tracking
   @Prop({ type: Activity, default: () => ({}) })
   activity: ActivityInfo;
+
+  // File attachments
+  @Prop({ type: [FileAttachmentSchema], default: [] })
+  attachments: FileAttachment[];
 
   // React Flow compatibility
   @Prop({ required: true, index: true })

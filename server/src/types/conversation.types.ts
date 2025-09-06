@@ -1,3 +1,19 @@
+export interface FileAttachment {
+  id: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  gridFSFileId: string;
+  textContent?: string;
+  uploadedAt: Date;
+  uploadedBy?: string;
+  isInherited: boolean;
+  inheritedFromNodeId?: string;
+  processingStatus?: 'pending' | 'processing' | 'completed' | 'error';
+  processingError?: string;
+}
+
 export interface ConversationNode {
   id: string;
   prompt: string;
@@ -10,6 +26,7 @@ export interface ConversationNode {
     x: number;
     y: number;
   };
+  attachments?: FileAttachment[];
 }
 
 export interface ConversationTree {
@@ -82,4 +99,11 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   node: ConversationNode;
+}
+
+export interface FileUploadDto {
+  nodeId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
 }
