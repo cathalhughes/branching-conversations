@@ -27,6 +27,12 @@ export interface ConversationNode {
     y: number;
   };
   attachments?: FileAttachment[];
+  lastEditedBy?: {
+    userId: string;
+    userName: string;
+    userEmail: string;
+    color?: string;
+  };
 }
 
 export interface ConversationTree {

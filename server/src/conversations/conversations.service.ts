@@ -277,6 +277,13 @@ export class ConversationsService {
               node._id.toString(),
             );
 
+            const lastEditedBy = node.activity?.lastEditedBy ? {
+              userId: node.activity.lastEditedBy.id.toString(),
+              userName: node.activity.lastEditedBy.name,
+              userEmail: node.activity.lastEditedBy.email,
+              color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+            } : undefined;
+
             return {
               id: node._id.toString(),
               prompt: node.prompt,
@@ -287,6 +294,7 @@ export class ConversationsService {
               isGenerating: node.isGenerating,
               position: node.position,
               attachments: nodeWithFiles?.attachments || [],
+              lastEditedBy,
             };
           })
         );
@@ -482,6 +490,13 @@ export class ConversationsService {
           node._id.toString(),
         );
 
+        const lastEditedBy = node.activity?.lastEditedBy ? {
+          userId: node.activity.lastEditedBy.id.toString(),
+          userName: node.activity.lastEditedBy.name,
+          userEmail: node.activity.lastEditedBy.email,
+          color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+        } : undefined;
+
         return {
           id: node._id.toString(),
           prompt: node.prompt,
@@ -492,6 +507,7 @@ export class ConversationsService {
           isGenerating: node.isGenerating,
           position: node.position,
           attachments: nodeWithFiles?.attachments || [],
+          lastEditedBy,
         };
       })
     );
@@ -605,6 +621,7 @@ export class ConversationsService {
         branchIndex = parentNode.childCount;
       }
 
+      const user = this.getCurrentUser(userFromHeaders);
       const node = await this.nodeModel.create({
         prompt: prompt,
         aiModel: createNodeDto.model,
@@ -620,6 +637,11 @@ export class ConversationsService {
           isBeingEdited: false,
           currentEditors: [],
           lastEditedAt: new Date(),
+          lastEditedBy: {
+            id: this.createObjectIdFromString(user.userId),
+            name: user.userName,
+            email: userFromHeaders?.userEmail || '',
+          },
         },
       });
 
@@ -648,7 +670,6 @@ export class ConversationsService {
       });
 
       // Log activity
-      const user = this.getCurrentUser(userFromHeaders);
       if (createNodeDto.parentId) {
         // This is a branch creation
         await this.activityService.logBranchCreated(
@@ -686,6 +707,12 @@ export class ConversationsService {
         parentId: node.parentId?.toString(),
         position: node.position,
         attachments: nodeWithFiles?.attachments || [],
+        lastEditedBy: {
+          userId: user.userId,
+          userName: user.userName,
+          userEmail: userFromHeaders?.userEmail || '',
+          color: this.getColorForUserId(user.userId),
+        },
       };
       await this.collaborationGateway.broadcastNodeCreated(conversation.canvasId.toString(), treeId, nodeResult);
 
@@ -721,16 +748,27 @@ export class ConversationsService {
       node.position = updateNodeDto.position;
     }
 
+    // Update lastEditedBy only for content changes (not position-only updates)
+    const hasContentChanges = updateNodeDto.prompt !== undefined || updateNodeDto.response !== undefined;
+    if (hasContentChanges) {
+      const user = this.getCurrentUser(userFromHeaders);
+      node.activity.lastEditedBy = {
+        id: this.createObjectIdFromString(user.userId),
+        name: user.userName,
+        email: userFromHeaders?.userEmail || '',
+      };
+    }
+
     const savedNode = await node.save();
 
     // Log activity for node edits
-    const user = this.getCurrentUser(userFromHeaders);
     const editTypes: string[] = [];
     if (updateNodeDto.prompt !== undefined) editTypes.push('prompt');
     if (updateNodeDto.response !== undefined) editTypes.push('response');
     if (updateNodeDto.position !== undefined) editTypes.push('position');
     
     if (editTypes.length > 0) {
+      const user = this.getCurrentUser(userFromHeaders);
       await this.activityService.logNodeEdited(
         node.canvasId.toString(),
         treeId,
@@ -747,6 +785,8 @@ export class ConversationsService {
       savedNode._id.toString(),
     );
 
+    const user = this.getCurrentUser(userFromHeaders);
+
     // Broadcast node update to all connected clients
     const nodeResult = {
       id: savedNode._id.toString(),
@@ -758,6 +798,12 @@ export class ConversationsService {
       isGenerating: savedNode.isGenerating,
       position: savedNode.position,
       attachments: nodeWithFiles?.attachments || [],
+      lastEditedBy: {
+        userId: user.userId,
+        userName: user.userName,
+        userEmail: userFromHeaders?.userEmail || '',
+        color: this.getColorForUserId(user.userId),
+      },
     };
     await this.collaborationGateway.broadcastNodeUpdated(savedNode.canvasId.toString(), treeId, nodeResult);
 
@@ -874,6 +920,13 @@ export class ConversationsService {
           node._id.toString(),
         );
 
+        const lastEditedBy = node.activity?.lastEditedBy ? {
+          userId: node.activity.lastEditedBy.id.toString(),
+          userName: node.activity.lastEditedBy.name,
+          userEmail: node.activity.lastEditedBy.email,
+          color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+        } : undefined;
+
         return {
           id: node._id.toString(),
           prompt: node.prompt,
@@ -884,6 +937,7 @@ export class ConversationsService {
           isGenerating: node.isGenerating,
           position: node.position,
           attachments: nodeWithFiles?.attachments || [],
+          lastEditedBy,
         };
       })
     );
@@ -918,6 +972,13 @@ export class ConversationsService {
           node._id.toString(),
         );
 
+        const lastEditedBy = node.activity?.lastEditedBy ? {
+          userId: node.activity.lastEditedBy.id.toString(),
+          userName: node.activity.lastEditedBy.name,
+          userEmail: node.activity.lastEditedBy.email,
+          color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+        } : undefined;
+
         return {
           id: node._id.toString(),
           prompt: node.prompt,
@@ -928,6 +989,7 @@ export class ConversationsService {
           isGenerating: node.isGenerating,
           position: node.position,
           attachments: nodeWithFiles?.attachments || [],
+          lastEditedBy,
         };
       })
     );
@@ -1005,6 +1067,13 @@ export class ConversationsService {
         node._id.toString(),
       );
 
+      const lastEditedBy = node.activity?.lastEditedBy ? {
+        userId: node.activity.lastEditedBy.id.toString(),
+        userName: node.activity.lastEditedBy.name,
+        userEmail: node.activity.lastEditedBy.email,
+        color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+      } : undefined;
+
       return {
         node: {
           id: node._id.toString(),
@@ -1016,6 +1085,7 @@ export class ConversationsService {
           isGenerating: node.isGenerating,
           position: node.position,
           attachments: nodeWithFiles?.attachments || [],
+          lastEditedBy,
         },
       };
     } catch (error) {
@@ -1031,10 +1101,19 @@ export class ConversationsService {
     }
 
     try {
-      // Update the node with the prompt
+      // Update the node with the prompt and track editor
       node.prompt = chatRequest.prompt;
       node.aiModel = chatRequest.model;
       node.isGenerating = true;
+      
+      // Update lastEditedBy
+      const user = this.getCurrentUser(userFromHeaders);
+      node.activity.lastEditedBy = {
+        id: this.createObjectIdFromString(user.userId),
+        name: user.userName,
+        email: userFromHeaders?.userEmail || '',
+      };
+      
       await node.save();
 
       yield {
@@ -1182,7 +1261,14 @@ export class ConversationsService {
         description: `${user.userName} uploaded file: ${originalName}`,
       });
 
-      // Return updated node
+      // Return updated node with lastEditedBy
+      const lastEditedBy = node.activity?.lastEditedBy ? {
+        userId: node.activity.lastEditedBy.id.toString(),
+        userName: node.activity.lastEditedBy.name,
+        userEmail: node.activity.lastEditedBy.email,
+        color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+      } : undefined;
+
       return {
         id: node._id.toString(),
         prompt: node.prompt,
@@ -1193,6 +1279,7 @@ export class ConversationsService {
         isGenerating: node.isGenerating,
         position: node.position,
         attachments: node.attachments as any,
+        lastEditedBy,
       };
     } catch (error) {
       throw error;
@@ -1246,6 +1333,13 @@ export class ConversationsService {
       ...inheritedFiles,
     ];
 
+    const lastEditedBy = node.activity?.lastEditedBy ? {
+      userId: node.activity.lastEditedBy.id.toString(),
+      userName: node.activity.lastEditedBy.name,
+      userEmail: node.activity.lastEditedBy.email,
+      color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+    } : undefined;
+
     return {
       id: node._id.toString(),
       prompt: node.prompt,
@@ -1256,6 +1350,7 @@ export class ConversationsService {
       isGenerating: node.isGenerating,
       position: node.position,
       attachments: allAttachments as any,
+      lastEditedBy,
     };
   }
 
@@ -1305,6 +1400,13 @@ export class ConversationsService {
         description: `${user.userName} deleted file: ${attachment.originalName}`,
       });
 
+      const lastEditedBy = node.activity?.lastEditedBy ? {
+        userId: node.activity.lastEditedBy.id.toString(),
+        userName: node.activity.lastEditedBy.name,
+        userEmail: node.activity.lastEditedBy.email,
+        color: this.getColorForUserId(node.activity.lastEditedBy.id.toString()),
+      } : undefined;
+
       return {
         id: node._id.toString(),
         prompt: node.prompt,
@@ -1315,6 +1417,7 @@ export class ConversationsService {
         isGenerating: node.isGenerating,
         position: node.position,
         attachments: node.attachments as any,
+        lastEditedBy,
       };
     } catch (error) {
       throw error;

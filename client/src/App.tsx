@@ -41,23 +41,29 @@ const CanvasRoute = observer(() => {
     loadCanvas();
   }, [id, conversationStore, navigate]);
 
-  // Set a demo user for now - in production this would come from auth
+  // Load user from localStorage or redirect to home for user selection
   useEffect(() => {
     if (!currentUser) {
-      const demoUser = {
-        userId: 'user_demo_123',
-        userName: 'Alex Chen',
-        userEmail: 'alex@example.com',
-        color: '#3B82F6'
-      };
-      setCurrentUser(demoUser);
-      conversationStore.setCurrentUser({
-        userId: demoUser.userId,
-        userName: demoUser.userName,
-        userEmail: demoUser.userEmail,
-      });
+      const savedUser = localStorage.getItem('selectedUser');
+      if (savedUser) {
+        try {
+          const user = JSON.parse(savedUser);
+          setCurrentUser(user);
+          conversationStore.setCurrentUser({
+            userId: user.userId,
+            userName: user.userName,
+            userEmail: user.userEmail,
+          });
+        } catch (err) {
+          console.error('Failed to parse saved user:', err);
+          navigate('/');
+        }
+      } else {
+        // No user selected, redirect to home
+        navigate('/');
+      }
     }
-  }, [currentUser, conversationStore]);
+  }, [currentUser, conversationStore, navigate]);
 
   const handleNavigateToLocation = (activity: Activity) => {
     console.log('Navigate to activity location:', activity);
@@ -69,6 +75,7 @@ const CanvasRoute = observer(() => {
 
   const handleUserChange = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
     setCurrentUser(user);
+    localStorage.setItem('selectedUser', JSON.stringify(user));
     conversationStore.setCurrentUser({
       userId: user.userId,
       userName: user.userName,
@@ -168,6 +175,22 @@ const HomeRoute = observer(() => {
   const [showLandingPage, setShowLandingPage] = useState(true);
   const [showCreatePage, setShowCreatePage] = useState(false);
 
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('selectedUser');
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        setCurrentUser(user);
+        setShowLandingPage(false);
+        setShowCreatePage(true);
+      } catch (err) {
+        console.error('Failed to parse saved user:', err);
+        localStorage.removeItem('selectedUser');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (currentUser) {
       conversationStore.setCurrentUser({
@@ -180,6 +203,7 @@ const HomeRoute = observer(() => {
 
   const handleUserSelect = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
     setCurrentUser(user);
+    localStorage.setItem('selectedUser', JSON.stringify(user));
     setShowLandingPage(false);
     setShowCreatePage(true);
   };
@@ -191,6 +215,7 @@ const HomeRoute = observer(() => {
 
   const handleBackToLanding = () => {
     setCurrentUser(null);
+    localStorage.removeItem('selectedUser');
     setShowLandingPage(true);
     setShowCreatePage(false);
   };
