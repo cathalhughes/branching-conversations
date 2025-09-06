@@ -231,20 +231,55 @@ export class FileService {
     const inheritedFiles: FileAttachment[] = [];
     let currentNodeId = nodeHierarchy.get(nodeId);
 
+    console.log(`Getting inherited attachments for node: ${nodeId}`);
+    console.log(`Parent node: ${currentNodeId}`);
+
     while (currentNodeId) {
       const parentAttachments = allNodeAttachments.get(currentNodeId) || [];
+      console.log(`Found ${parentAttachments.length} attachments in parent node ${currentNodeId}:`, 
+        parentAttachments.map(att => ({
+          id: att.id,
+          originalName: att.originalName,
+          size: att.size,
+          mimeType: att.mimeType
+        }))
+      );
       
       for (const attachment of parentAttachments) {
-        inheritedFiles.push({
-          ...attachment,
+        const inheritedFile: FileAttachment = {
+          id: attachment.id,
+          filename: attachment.filename,
+          originalName: attachment.originalName,
+          mimeType: attachment.mimeType,
+          originalMimeType: attachment.originalMimeType,
+          size: attachment.size,
+          originalSize: attachment.originalSize,
+          gridFSFileId: attachment.gridFSFileId, 
+          textContent: attachment.textContent,
+          uploadedAt: new Date(attachment.uploadedAt),
+          uploadedBy: attachment.uploadedBy,
           isInherited: true,
           inheritedFromNodeId: currentNodeId,
+          processingStatus: attachment.processingStatus || 'completed',
+          processingError: attachment.processingError,
+        };
+        
+        console.log(`Created inherited file:`, {
+          id: inheritedFile.id,
+          originalName: inheritedFile.originalName,
+          size: inheritedFile.size,
+          mimeType: inheritedFile.mimeType,
+          isInherited: inheritedFile.isInherited,
+          inheritedFromNodeId: inheritedFile.inheritedFromNodeId
         });
+        
+        inheritedFiles.push(inheritedFile);
       }
       
       currentNodeId = nodeHierarchy.get(currentNodeId);
     }
 
+    console.log(`Returning ${inheritedFiles.length} inherited files for node ${nodeId}`);
     return inheritedFiles;
   }
 

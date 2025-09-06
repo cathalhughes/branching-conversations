@@ -269,20 +269,33 @@ export class ConversationsService {
           })
           .sort({ createdAt: 1 });
 
+        // Get nodes with inherited attachments
+        const nodesWithAttachments = await Promise.all(
+          nodes.map(async (node) => {
+            const nodeWithFiles = await this.getNodeWithInheritedFiles(
+              conv._id.toString(),
+              node._id.toString(),
+            );
+
+            return {
+              id: node._id.toString(),
+              prompt: node.prompt,
+              response: node.response,
+              model: node.aiModel || 'gpt-4.1-nano',
+              timestamp: node.createdAt,
+              parentId: node.parentId ? node.parentId.toString() : undefined,
+              isGenerating: node.isGenerating,
+              position: node.position,
+              attachments: nodeWithFiles?.attachments || [],
+            };
+          })
+        );
+
         return {
           id: conv._id.toString(),
           name: conv.name,
           description: conv.description,
-          nodes: nodes.map(node => ({
-            id: node._id.toString(),
-            prompt: node.prompt,
-            response: node.response,
-            model: node.aiModel || 'gpt-4.1-nano',
-            timestamp: node.createdAt,
-            parentId: node.parentId ? node.parentId.toString() : undefined,
-            isGenerating: node.isGenerating,
-            position: node.position,
-          })),
+          nodes: nodesWithAttachments,
           rootNodeId: conv.rootNodeId ? conv.rootNodeId.toString() : '',
           createdAt: conv.createdAt,
           updatedAt: conv.updatedAt,
@@ -461,20 +474,33 @@ export class ConversationsService {
       })
       .sort({ depth: 1, branchIndex: 1 });
 
+    // Get nodes with inherited attachments
+    const nodesWithAttachments = await Promise.all(
+      nodes.map(async (node) => {
+        const nodeWithFiles = await this.getNodeWithInheritedFiles(
+          treeId,
+          node._id.toString(),
+        );
+
+        return {
+          id: node._id.toString(),
+          prompt: node.prompt,
+          response: node.response,
+          model: node.aiModel,
+          timestamp: node.createdAt,
+          parentId: node.parentId?.toString(),
+          isGenerating: node.isGenerating,
+          position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
+        };
+      })
+    );
+
     return {
       id: conversation._id.toString(),
       name: conversation.name,
       description: conversation.description,
-      nodes: nodes.map((node) => ({
-        id: node._id.toString(),
-        prompt: node.prompt,
-        response: node.response,
-        model: node.aiModel,
-        timestamp: node.createdAt,
-        parentId: node.parentId?.toString(),
-        isGenerating: node.isGenerating,
-        position: node.position,
-      })),
+      nodes: nodesWithAttachments,
       rootNodeId: conversation.rootNodeId?.toString() || '',
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
@@ -645,6 +671,12 @@ export class ConversationsService {
         });
       }
 
+      // Get node with inherited attachments for response
+      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+        treeId,
+        node._id.toString(),
+      );
+
       // Broadcast node creation to all connected clients
       const nodeResult = {
         id: node._id.toString(),
@@ -653,6 +685,7 @@ export class ConversationsService {
         timestamp: node.createdAt,
         parentId: node.parentId?.toString(),
         position: node.position,
+        attachments: nodeWithFiles?.attachments || [],
       };
       await this.collaborationGateway.broadcastNodeCreated(conversation.canvasId.toString(), treeId, nodeResult);
 
@@ -708,6 +741,12 @@ export class ConversationsService {
       );
     }
 
+    // Get updated node with inherited attachments
+    const nodeWithFiles = await this.getNodeWithInheritedFiles(
+      treeId,
+      savedNode._id.toString(),
+    );
+
     // Broadcast node update to all connected clients
     const nodeResult = {
       id: savedNode._id.toString(),
@@ -718,6 +757,7 @@ export class ConversationsService {
       parentId: savedNode.parentId?.toString(),
       isGenerating: savedNode.isGenerating,
       position: savedNode.position,
+      attachments: nodeWithFiles?.attachments || [],
     };
     await this.collaborationGateway.broadcastNodeUpdated(savedNode.canvasId.toString(), treeId, nodeResult);
 
@@ -826,16 +866,29 @@ export class ConversationsService {
       })
       .sort({ branchIndex: 1 });
 
-    return nodes.map((node) => ({
-      id: node._id.toString(),
-      prompt: node.prompt,
-      response: node.response,
-      model: node.aiModel,
-      timestamp: node.createdAt,
-      parentId: node.parentId?.toString(),
-      isGenerating: node.isGenerating,
-      position: node.position,
-    }));
+    // Get nodes with inherited attachments
+    const nodesWithAttachments = await Promise.all(
+      nodes.map(async (node) => {
+        const nodeWithFiles = await this.getNodeWithInheritedFiles(
+          treeId,
+          node._id.toString(),
+        );
+
+        return {
+          id: node._id.toString(),
+          prompt: node.prompt,
+          response: node.response,
+          model: node.aiModel,
+          timestamp: node.createdAt,
+          parentId: node.parentId?.toString(),
+          isGenerating: node.isGenerating,
+          position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
+        };
+      })
+    );
+
+    return nodesWithAttachments;
   }
 
   async getConversationHistory(
@@ -855,18 +908,31 @@ export class ConversationsService {
       }
     }
 
-    return path
-      .filter((node) => node.prompt && node.response && !node.isDeleted)
-      .map((node) => ({
-        id: node._id.toString(),
-        prompt: node.prompt,
-        response: node.response,
-        model: node.aiModel,
-        timestamp: node.createdAt,
-        parentId: node.parentId?.toString(),
-        isGenerating: node.isGenerating,
-        position: node.position,
-      }));
+    const filteredNodes = path.filter((node) => node.prompt && node.response && !node.isDeleted);
+    
+    // Get nodes with inherited attachments
+    const nodesWithAttachments = await Promise.all(
+      filteredNodes.map(async (node) => {
+        const nodeWithFiles = await this.getNodeWithInheritedFiles(
+          treeId,
+          node._id.toString(),
+        );
+
+        return {
+          id: node._id.toString(),
+          prompt: node.prompt,
+          response: node.response,
+          model: node.aiModel,
+          timestamp: node.createdAt,
+          parentId: node.parentId?.toString(),
+          isGenerating: node.isGenerating,
+          position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
+        };
+      })
+    );
+
+    return nodesWithAttachments;
   }
 
   async chat(chatRequest: ChatRequest): Promise<ChatResponse | null> {
@@ -888,7 +954,7 @@ export class ConversationsService {
       );
       
       // Get current node with inherited files for context
-      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+      const nodeForContext = await this.getNodeWithInheritedFiles(
         chatRequest.treeId,
         node._id.toString(),
       );
@@ -898,8 +964,8 @@ export class ConversationsService {
 
       // Build file context from all available attachments
       let fileContext = '';
-      if (nodeWithFiles && nodeWithFiles.attachments && nodeWithFiles.attachments.length > 0) {
-        const contextFiles = nodeWithFiles.attachments.filter(att => att.textContent);
+      if (nodeForContext && nodeForContext.attachments && nodeForContext.attachments.length > 0) {
+        const contextFiles = nodeForContext.attachments.filter(att => att.textContent);
         if (contextFiles.length > 0) {
           fileContext = '\n\nFile Context:\n';
           contextFiles.forEach(attachment => {
@@ -933,6 +999,12 @@ export class ConversationsService {
       node.response = text;
       await node.save();
 
+      // Get node with inherited attachments for response
+      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+
       return {
         node: {
           id: node._id.toString(),
@@ -943,6 +1015,7 @@ export class ConversationsService {
           parentId: node.parentId?.toString(),
           isGenerating: node.isGenerating,
           position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
         },
       };
     } catch (error) {
@@ -985,20 +1058,20 @@ export class ConversationsService {
       );
       
       // Get current node with inherited files for context
-      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+      const nodeWithInheritedFiles = await this.getNodeWithInheritedFiles(
         chatRequest.treeId,
         node._id.toString(),
       );
 
-      console.log({ nodeWithFiles })
+      console.log({ nodeWithInheritedFiles })
 
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
         [];
 
       // Build file context from all available attachments
       let fileContext = '';
-      if (nodeWithFiles && nodeWithFiles.attachments && nodeWithFiles.attachments.length > 0) {
-        const contextFiles = nodeWithFiles.attachments.filter(att => att.textContent);
+      if (nodeWithInheritedFiles && nodeWithInheritedFiles.attachments && nodeWithInheritedFiles.attachments.length > 0) {
+        const contextFiles = nodeWithInheritedFiles.attachments.filter(att => att.textContent);
         if (contextFiles.length > 0) {
           fileContext = '\n\nFile Context:\n';
           contextFiles.forEach(attachment => {
