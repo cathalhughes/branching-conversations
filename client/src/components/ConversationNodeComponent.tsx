@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { observer } from 'mobx-react-lite';
 import { ConversationNode } from '../types/conversation.types';
+import { conversationStore } from '../stores/ConversationStore';
 
 export interface ConversationNodeData {
   node: ConversationNode;
@@ -18,6 +19,8 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-nano');
   const [isEditing, setIsEditing] = useState(false);
   const [isResponseExpanded, setIsResponseExpanded] = useState(false);
+  const [isFileUploading, setIsFileUploading] = useState(false);
+  const [showFileUpload, setShowFileUpload] = useState(false);
   const { node, treeId, rootNodeId, onSendMessage, onAddNode, onDeleteNode, isLoading } = props.data as any as ConversationNodeData;
 
   const availableModels = [
@@ -65,6 +68,43 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
   const cancelEditing = () => {
     setIsEditing(false);
     setPrompt(node.prompt || '');
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (20MB limit)
+    const maxSizeInBytes = 20 * 1024 * 1024; // 20MB
+    if (file.size > maxSizeInBytes) {
+      alert(`File size exceeds 20MB limit. Your file is ${formatFileSize(file.size)}.`);
+      event.target.value = ''; // Reset file input
+      return;
+    }
+
+    setIsFileUploading(true);
+    try {
+      const success = await conversationStore.uploadFileToNode(treeId, node.id, file);
+      
+      if (success) {
+        setShowFileUpload(false);
+        // Reset file input
+        event.target.value = '';
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setIsFileUploading(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const hasContent = node.prompt || node.response;
@@ -202,6 +242,82 @@ const ConversationNodeComponent = observer((props: NodeProps) => {
             Enter a prompt to get started
           </div>
         )}
+      </div>
+
+      {/* File Attachments Section */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-gray-700">File Attachments</h4>
+          <button
+            onClick={() => setShowFileUpload(!showFileUpload)}
+            disabled={isGenerating}
+            className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {showFileUpload ? 'Cancel' : '+ Add File'}
+          </button>
+        </div>
+
+        {showFileUpload && (
+          <div className="mb-3 p-2 bg-blue-50 rounded">
+            <input
+              type="file"
+              onChange={handleFileUpload}
+              disabled={isFileUploading}
+              className="text-xs w-full"
+              accept=".txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.java,.cpp,.c,.cs,.php,.rb,.go,.rs,.scala,.kt,.sh,.sql,.xml,.html,.css,.scss,.less,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.pdf,.ppt,.pptx,.xls,.xlsx,.doc,.docx"
+            />
+            {isFileUploading && (
+              <div className="text-xs text-blue-600 mt-1">
+                Uploading file...
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Display attachments */}
+        <div className="space-y-2">
+          {node.attachments && node.attachments.length > 0 ? (
+            node.attachments.map((attachment) => (
+              <div 
+                key={attachment.id} 
+                className={`text-xs p-2 rounded flex items-center justify-between ${
+                  attachment.isInherited ? 'bg-yellow-50 border-l-2 border-yellow-400' : 'bg-gray-50'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{attachment.originalName}</span>
+                    {attachment.isInherited && (
+                      <span className="text-yellow-600 text-xs">(inherited)</span>
+                    )}
+                  </div>
+                  <div className="text-gray-500 text-xs">
+                    {formatFileSize(attachment.size)} • {attachment.mimeType}
+                    {attachment.isInherited && attachment.inheritedFromNodeId && (
+                      <span> • from parent node</span>
+                    )}
+                  </div>
+                </div>
+                {!attachment.isInherited && (
+                  <button
+                    onClick={async () => {
+                      if (window.confirm(`Are you sure you want to delete ${attachment.originalName}?`)) {
+                        await conversationStore.deleteFileFromNode(treeId, node.id, attachment.id);
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-800 text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="text-xs text-gray-400 italic">
+              No files attached. Files from parent nodes will appear here automatically.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add New Branch Button */}

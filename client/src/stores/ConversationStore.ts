@@ -63,6 +63,7 @@ class ConversationStore {
             nodes: tree.nodes.map((node: any) => ({
               ...node,
               timestamp: new Date(node.timestamp),
+              attachments: node.attachments || [],
             })),
           })),
           createdAt: new Date(canvas.createdAt),
@@ -574,6 +575,97 @@ class ConversationStore {
     return this.selectedTreeId && this.selectedNodeId 
       ? this.getNodeById(this.selectedTreeId, this.selectedNodeId) 
       : undefined;
+  }
+
+  async uploadFileToNode(
+    treeId: string,
+    nodeId: string,
+    file: File,
+  ): Promise<boolean> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Create headers without Content-Type for FormData
+      const headers = { ...this.getHeaders() };
+      delete headers['Content-Type']; // Let browser set multipart/form-data boundary
+
+      const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}/files`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('File upload failed');
+      }
+
+      // Refresh canvas to get updated node data
+      await this.loadCanvas(this.canvas?.id);
+
+      runInAction(() => {
+        this.error = null;
+      });
+
+      return true;
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'File upload failed';
+      });
+      return false;
+    }
+  }
+
+  async deleteFileFromNode(
+    treeId: string,
+    nodeId: string,
+    attachmentId: string,
+  ): Promise<boolean> {
+    try {
+      const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}/files/${attachmentId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('File deletion failed');
+      }
+
+      // Refresh canvas to get updated node data
+      await this.loadCanvas(this.canvas?.id);
+
+      runInAction(() => {
+        this.error = null;
+      });
+
+      return true;
+    } catch (error) {
+      runInAction(() => {
+        this.error = error instanceof Error ? error.message : 'File deletion failed';
+      });
+      return false;
+    }
+  }
+
+  async getNodeFiles(
+    treeId: string,
+    nodeId: string,
+  ): Promise<any[]> {
+    try {
+      const response = await fetch(`http://localhost:3001/conversations/trees/${treeId}/nodes/${nodeId}/files`, {
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch node files');
+      }
+
+      const data = await response.json();
+      return data.attachments || [];
+    } catch (error) {
+      console.error('Error fetching node files:', error);
+      return [];
+    }
   }
 }
 

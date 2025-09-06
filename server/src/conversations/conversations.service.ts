@@ -12,6 +12,7 @@ import { openai } from '@ai-sdk/openai';
 import { generateText, streamText } from 'ai';
 import { ActivityService } from './activity.service';
 import { CollaborationGateway } from './collaboration.gateway';
+import { FileService } from '../services/file.service';
 
 import { Canvas, CanvasModel } from '../schemas/canvas.schema';
 import {
@@ -53,6 +54,7 @@ export class ConversationsService {
     private activityService: ActivityService,
     @Inject(forwardRef(() => CollaborationGateway))
     private collaborationGateway: CollaborationGateway,
+    private fileService: FileService,
   ) {}
 
 
@@ -267,20 +269,33 @@ export class ConversationsService {
           })
           .sort({ createdAt: 1 });
 
+        // Get nodes with inherited attachments
+        const nodesWithAttachments = await Promise.all(
+          nodes.map(async (node) => {
+            const nodeWithFiles = await this.getNodeWithInheritedFiles(
+              conv._id.toString(),
+              node._id.toString(),
+            );
+
+            return {
+              id: node._id.toString(),
+              prompt: node.prompt,
+              response: node.response,
+              model: node.aiModel || 'gpt-4.1-nano',
+              timestamp: node.createdAt,
+              parentId: node.parentId ? node.parentId.toString() : undefined,
+              isGenerating: node.isGenerating,
+              position: node.position,
+              attachments: nodeWithFiles?.attachments || [],
+            };
+          })
+        );
+
         return {
           id: conv._id.toString(),
           name: conv.name,
           description: conv.description,
-          nodes: nodes.map(node => ({
-            id: node._id.toString(),
-            prompt: node.prompt,
-            response: node.response,
-            model: node.aiModel || 'gpt-4.1-nano',
-            timestamp: node.createdAt,
-            parentId: node.parentId ? node.parentId.toString() : undefined,
-            isGenerating: node.isGenerating,
-            position: node.position,
-          })),
+          nodes: nodesWithAttachments,
           rootNodeId: conv.rootNodeId ? conv.rootNodeId.toString() : '',
           createdAt: conv.createdAt,
           updatedAt: conv.updatedAt,
@@ -459,20 +474,33 @@ export class ConversationsService {
       })
       .sort({ depth: 1, branchIndex: 1 });
 
+    // Get nodes with inherited attachments
+    const nodesWithAttachments = await Promise.all(
+      nodes.map(async (node) => {
+        const nodeWithFiles = await this.getNodeWithInheritedFiles(
+          treeId,
+          node._id.toString(),
+        );
+
+        return {
+          id: node._id.toString(),
+          prompt: node.prompt,
+          response: node.response,
+          model: node.aiModel,
+          timestamp: node.createdAt,
+          parentId: node.parentId?.toString(),
+          isGenerating: node.isGenerating,
+          position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
+        };
+      })
+    );
+
     return {
       id: conversation._id.toString(),
       name: conversation.name,
       description: conversation.description,
-      nodes: nodes.map((node) => ({
-        id: node._id.toString(),
-        prompt: node.prompt,
-        response: node.response,
-        model: node.aiModel,
-        timestamp: node.createdAt,
-        parentId: node.parentId?.toString(),
-        isGenerating: node.isGenerating,
-        position: node.position,
-      })),
+      nodes: nodesWithAttachments,
       rootNodeId: conversation.rootNodeId?.toString() || '',
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
@@ -643,6 +671,12 @@ export class ConversationsService {
         });
       }
 
+      // Get node with inherited attachments for response
+      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+        treeId,
+        node._id.toString(),
+      );
+
       // Broadcast node creation to all connected clients
       const nodeResult = {
         id: node._id.toString(),
@@ -651,6 +685,7 @@ export class ConversationsService {
         timestamp: node.createdAt,
         parentId: node.parentId?.toString(),
         position: node.position,
+        attachments: nodeWithFiles?.attachments || [],
       };
       await this.collaborationGateway.broadcastNodeCreated(conversation.canvasId.toString(), treeId, nodeResult);
 
@@ -706,6 +741,12 @@ export class ConversationsService {
       );
     }
 
+    // Get updated node with inherited attachments
+    const nodeWithFiles = await this.getNodeWithInheritedFiles(
+      treeId,
+      savedNode._id.toString(),
+    );
+
     // Broadcast node update to all connected clients
     const nodeResult = {
       id: savedNode._id.toString(),
@@ -716,6 +757,7 @@ export class ConversationsService {
       parentId: savedNode.parentId?.toString(),
       isGenerating: savedNode.isGenerating,
       position: savedNode.position,
+      attachments: nodeWithFiles?.attachments || [],
     };
     await this.collaborationGateway.broadcastNodeUpdated(savedNode.canvasId.toString(), treeId, nodeResult);
 
@@ -824,16 +866,29 @@ export class ConversationsService {
       })
       .sort({ branchIndex: 1 });
 
-    return nodes.map((node) => ({
-      id: node._id.toString(),
-      prompt: node.prompt,
-      response: node.response,
-      model: node.aiModel,
-      timestamp: node.createdAt,
-      parentId: node.parentId?.toString(),
-      isGenerating: node.isGenerating,
-      position: node.position,
-    }));
+    // Get nodes with inherited attachments
+    const nodesWithAttachments = await Promise.all(
+      nodes.map(async (node) => {
+        const nodeWithFiles = await this.getNodeWithInheritedFiles(
+          treeId,
+          node._id.toString(),
+        );
+
+        return {
+          id: node._id.toString(),
+          prompt: node.prompt,
+          response: node.response,
+          model: node.aiModel,
+          timestamp: node.createdAt,
+          parentId: node.parentId?.toString(),
+          isGenerating: node.isGenerating,
+          position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
+        };
+      })
+    );
+
+    return nodesWithAttachments;
   }
 
   async getConversationHistory(
@@ -853,18 +908,31 @@ export class ConversationsService {
       }
     }
 
-    return path
-      .filter((node) => node.prompt && node.response && !node.isDeleted)
-      .map((node) => ({
-        id: node._id.toString(),
-        prompt: node.prompt,
-        response: node.response,
-        model: node.aiModel,
-        timestamp: node.createdAt,
-        parentId: node.parentId?.toString(),
-        isGenerating: node.isGenerating,
-        position: node.position,
-      }));
+    const filteredNodes = path.filter((node) => node.prompt && node.response && !node.isDeleted);
+    
+    // Get nodes with inherited attachments
+    const nodesWithAttachments = await Promise.all(
+      filteredNodes.map(async (node) => {
+        const nodeWithFiles = await this.getNodeWithInheritedFiles(
+          treeId,
+          node._id.toString(),
+        );
+
+        return {
+          id: node._id.toString(),
+          prompt: node.prompt,
+          response: node.response,
+          model: node.aiModel,
+          timestamp: node.createdAt,
+          parentId: node.parentId?.toString(),
+          isGenerating: node.isGenerating,
+          position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
+        };
+      })
+    );
+
+    return nodesWithAttachments;
   }
 
   async chat(chatRequest: ChatRequest): Promise<ChatResponse | null> {
@@ -879,12 +947,33 @@ export class ConversationsService {
       node.aiModel = chatRequest.model;
       await node.save();
 
+      // Get conversation history with file attachments
       const history = await this.getConversationHistory(
         chatRequest.treeId,
         node._id.toString(),
       );
+      
+      // Get current node with inherited files for context
+      const nodeForContext = await this.getNodeWithInheritedFiles(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
         [];
+
+      // Build file context from all available attachments
+      let fileContext = '';
+      if (nodeForContext && nodeForContext.attachments && nodeForContext.attachments.length > 0) {
+        const contextFiles = nodeForContext.attachments.filter(att => att.textContent);
+        if (contextFiles.length > 0) {
+          fileContext = '\n\nFile Context:\n';
+          contextFiles.forEach(attachment => {
+            fileContext += `--- ${attachment.originalName} ---\n`;
+            fileContext += attachment.textContent + '\n\n';
+          });
+        }
+      }
 
       // Add conversation history
       history.forEach((historyNode) => {
@@ -894,8 +983,12 @@ export class ConversationsService {
         }
       });
 
-      // Add current prompt
-      messages.push({ role: 'user', content: chatRequest.prompt });
+      // Add current prompt with file context
+      const promptWithContext = fileContext 
+        ? chatRequest.prompt + fileContext
+        : chatRequest.prompt;
+      
+      messages.push({ role: 'user', content: promptWithContext });
 
       const model = chatRequest.model || 'gpt-3.5-turbo';
       const { text } = await generateText({
@@ -905,6 +998,12 @@ export class ConversationsService {
 
       node.response = text;
       await node.save();
+
+      // Get node with inherited attachments for response
+      const nodeWithFiles = await this.getNodeWithInheritedFiles(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
 
       return {
         node: {
@@ -916,6 +1015,7 @@ export class ConversationsService {
           parentId: node.parentId?.toString(),
           isGenerating: node.isGenerating,
           position: node.position,
+          attachments: nodeWithFiles?.attachments || [],
         },
       };
     } catch (error) {
@@ -951,12 +1051,35 @@ export class ConversationsService {
         },
       };
 
+      // Get conversation history with file attachments
       const history = await this.getConversationHistory(
         chatRequest.treeId,
         node._id.toString(),
       );
+      
+      // Get current node with inherited files for context
+      const nodeWithInheritedFiles = await this.getNodeWithInheritedFiles(
+        chatRequest.treeId,
+        node._id.toString(),
+      );
+
+      console.log({ nodeWithInheritedFiles })
+
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
         [];
+
+      // Build file context from all available attachments
+      let fileContext = '';
+      if (nodeWithInheritedFiles && nodeWithInheritedFiles.attachments && nodeWithInheritedFiles.attachments.length > 0) {
+        const contextFiles = nodeWithInheritedFiles.attachments.filter(att => att.textContent);
+        if (contextFiles.length > 0) {
+          fileContext = '\n\nFile Context:\n';
+          contextFiles.forEach(attachment => {
+            fileContext += `--- ${attachment.originalName} ---\n`;
+            fileContext += attachment.textContent + '\n\n';
+          });
+        }
+      }
 
       // Add conversation history
       history.forEach((historyNode) => {
@@ -966,24 +1089,23 @@ export class ConversationsService {
         }
       });
 
-      // Add current prompt
-      messages.push({ role: 'user', content: chatRequest.prompt });
+      // Add current prompt with file context
+      const promptWithContext = fileContext 
+        ? chatRequest.prompt + fileContext
+        : chatRequest.prompt;
+      
+      messages.push({ role: 'user', content: promptWithContext });
 
       const model = chatRequest.model || '';
-      console.log({ model, messages })
       const result = await streamText({
         model: openai(model),
         messages: messages as any,
       });
 
-      console.log({ result })
-
       let fullText = '';
       for await (const delta of result.textStream) {
-        console.log({ delta })
         fullText += delta;
         node.response = fullText;
-        console.log({ fullText });
         yield {
           type: 'nodeResponseUpdate',
           data: { nodeId: node._id.toString(), response: fullText },
@@ -1011,6 +1133,191 @@ export class ConversationsService {
       node.isGenerating = false;
       await node.save();
       yield { type: 'error', data: { message: 'Failed to generate response' } };
+    }
+  }
+
+  async uploadFileToNode(
+    treeId: string,
+    nodeId: string,
+    file: Buffer,
+    filename: string,
+    mimeType: string,
+    originalName: string,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
+  ): Promise<ConversationNodeType | null> {
+    const node = await this.nodeModel.findById(nodeId);
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
+      return null;
+    }
+
+    try {
+      const user = this.getCurrentUser(userFromHeaders);
+      
+      // Upload file using FileService
+      const attachment = await this.fileService.uploadFile(
+        file,
+        filename,
+        mimeType,
+        originalName,
+        user.userId,
+      );
+
+      // Add attachment to node
+      node.attachments = node.attachments || [];
+      node.attachments.push(attachment);
+      await node.save();
+
+      // Log activity
+      await this.activityService.logActivity({
+        canvasId: node.canvasId.toString(),
+        conversationId: treeId,
+        nodeId: nodeId,
+        userId: user.userId,
+        userName: user.userName,
+        activityType: 'file_uploaded' as any,
+        description: `${user.userName} uploaded file: ${originalName}`,
+      });
+
+      // Return updated node
+      return {
+        id: node._id.toString(),
+        prompt: node.prompt,
+        response: node.response,
+        model: node.aiModel,
+        timestamp: node.createdAt,
+        parentId: node.parentId?.toString(),
+        isGenerating: node.isGenerating,
+        position: node.position,
+        attachments: node.attachments as any,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getNodeWithInheritedFiles(
+    treeId: string,
+    nodeId: string,
+  ): Promise<ConversationNodeType | null> {
+    const node = await this.nodeModel.findById(nodeId);
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
+      return null;
+    }
+
+    // Get all nodes in the conversation for hierarchy building
+    const allNodes = await this.nodeModel
+      .find({
+        conversationId: treeId,
+        isDeleted: { $ne: true },
+      })
+      .select('_id parentId attachments');
+
+    // Build node hierarchy and attachments map
+    const nodeHierarchy = new Map<string, string>();
+    const nodeAttachments = new Map<string, any[]>();
+
+    allNodes.forEach(n => {
+      if (n.parentId) {
+        nodeHierarchy.set(n._id.toString(), n.parentId.toString());
+      }
+      if (n.attachments && n.attachments.length > 0) {
+        nodeAttachments.set(n._id.toString(), n.attachments);
+      }
+    });
+
+    // Get inherited files
+    const inheritedFiles = await this.fileService.getInheritedAttachments(
+      nodeId,
+      nodeAttachments,
+      nodeHierarchy,
+    );
+
+    // Combine direct attachments with inherited ones
+    const allAttachments = [
+      ...(node.attachments || []),
+      ...inheritedFiles,
+    ];
+
+    return {
+      id: node._id.toString(),
+      prompt: node.prompt,
+      response: node.response,
+      model: node.aiModel,
+      timestamp: node.createdAt,
+      parentId: node.parentId?.toString(),
+      isGenerating: node.isGenerating,
+      position: node.position,
+      attachments: allAttachments as any,
+    };
+  }
+
+  async deleteFileFromNode(
+    treeId: string,
+    nodeId: string,
+    attachmentId: string,
+    userFromHeaders?: { userId: string | null; userName: string | null; userEmail: string | null },
+  ): Promise<ConversationNodeType | null> {
+    const node = await this.nodeModel.findById(nodeId);
+    if (
+      !node ||
+      node.isDeleted ||
+      !node.conversationId.equals(new Types.ObjectId(treeId))
+    ) {
+      return null;
+    }
+
+    try {
+      // Find and remove the attachment
+      const attachmentIndex = node.attachments?.findIndex(
+        att => att.id === attachmentId
+      );
+
+      if (attachmentIndex === -1 || !node.attachments) {
+        return null;
+      }
+
+      const attachment = node.attachments[attachmentIndex];
+      
+      // Delete from GridFS
+      await this.fileService.deleteTextFile(new Types.ObjectId(attachment.gridFSFileId));
+
+      // Remove from node
+      node.attachments.splice(attachmentIndex, 1);
+      await node.save();
+
+      // Log activity
+      const user = this.getCurrentUser(userFromHeaders);
+      await this.activityService.logActivity({
+        canvasId: node.canvasId.toString(),
+        conversationId: treeId,
+        nodeId: nodeId,
+        userId: user.userId,
+        userName: user.userName,
+        activityType: 'file_deleted' as any,
+        description: `${user.userName} deleted file: ${attachment.originalName}`,
+      });
+
+      return {
+        id: node._id.toString(),
+        prompt: node.prompt,
+        response: node.response,
+        model: node.aiModel,
+        timestamp: node.createdAt,
+        parentId: node.parentId?.toString(),
+        isGenerating: node.isGenerating,
+        position: node.position,
+        attachments: node.attachments as any,
+      };
+    } catch (error) {
+      throw error;
     }
   }
 }

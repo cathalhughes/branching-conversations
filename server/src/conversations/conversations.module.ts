@@ -7,6 +7,7 @@ import { CollaborationController } from './collaboration.controller';
 import { CollaborationGateway } from './collaboration.gateway';
 import { ActivityService } from './activity.service';
 import { RedisModule } from './redis.module';
+import { FileService } from '../services/file.service';
 
 // Import schemas
 import { Canvas, CanvasSchema } from '../schemas/canvas.schema';
@@ -36,7 +37,7 @@ import { ActivitySchema } from '../schemas/activity.schema';
     RedisModule,
   ],
   controllers: [ConversationsController, CollaborationController],
-  providers: [ConversationsService, CollaborationService, CollaborationGateway, ActivityService],
+  providers: [ConversationsService, CollaborationService, CollaborationGateway, ActivityService, FileService],
   exports: [ConversationsService, CollaborationService, ActivityService],
 })
 export class ConversationsModule {}

@@ -11,6 +11,9 @@ export enum ActivityType {
   NODE_DELETED = 'node_deleted',
   BRANCH_CREATED = 'branch_created',
   
+  // File activities
+  FILE_UPLOADED = 'file_uploaded',
+  
   // Collaboration activities
   USER_JOINED_CANVAS = 'user_joined_canvas',
   USER_LEFT_CANVAS = 'user_left_canvas',
