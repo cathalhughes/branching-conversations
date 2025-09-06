@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { observer } from 'mobx-react-lite';
 import { StoreProvider, useStores } from './contexts/StoreContext';
 import Toolbar from './components/Toolbar';
@@ -8,59 +9,66 @@ import LandingPage from './components/LandingPage';
 import CreatePage from './components/CreatePage';
 import { Activity } from './types/activity.types';
 
-const DEMO_USERS = [
-  { userId: 'user_demo_123', userName: 'Alex Chen', userEmail: 'alex@example.com', color: '#3B82F6' },
-  { userId: 'user_demo_456', userName: 'Sarah Johnson', userEmail: 'sarah@example.com', color: '#10B981' },
-  { userId: 'user_demo_789', userName: 'Mike Rodriguez', userEmail: 'mike@example.com', color: '#F59E0B' },
-  { userId: 'user_demo_101', userName: 'Emma Davis', userEmail: 'emma@example.com', color: '#EF4444' },
-];
-
-const AppContent = observer(() => {
+// Canvas route component
+const CanvasRoute = observer(() => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { conversationStore } = useStores();
   const [showActivityPanel, setShowActivityPanel] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ userId: string; userName: string; userEmail: string; color: string } | null>(null);
-  const [showLandingPage, setShowLandingPage] = useState(true);
-  const [showCreatePage, setShowCreatePage] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Set initial user in store when user is selected
-  React.useEffect(() => {
-    if (currentUser) {
+  useEffect(() => {
+    if (!id) {
+      navigate('/');
+      return;
+    }
+
+    const loadCanvas = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        await conversationStore.loadCanvas(id);
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Failed to load canvas:', err);
+        setError('Failed to load canvas. You may not have access to this canvas.');
+        setIsLoading(false);
+      }
+    };
+
+    loadCanvas();
+  }, [id, conversationStore, navigate]);
+
+  // Set a demo user for now - in production this would come from auth
+  useEffect(() => {
+    if (!currentUser) {
+      const demoUser = {
+        userId: 'user_demo_123',
+        userName: 'Alex Chen',
+        userEmail: 'alex@example.com',
+        color: '#3B82F6'
+      };
+      setCurrentUser(demoUser);
       conversationStore.setCurrentUser({
-        userId: currentUser.userId,
-        userName: currentUser.userName,
-        userEmail: currentUser.userEmail,
+        userId: demoUser.userId,
+        userName: demoUser.userName,
+        userEmail: demoUser.userEmail,
       });
     }
-  }, [currentUser?.userId, currentUser?.userName, currentUser?.userEmail, conversationStore]);
-
-  // Get real canvas ID from the store
-  const canvasId = conversationStore.canvas?.id;
+  }, [currentUser, conversationStore]);
 
   const handleNavigateToLocation = (activity: Activity) => {
     console.log('Navigate to activity location:', activity);
-    // Here you would implement navigation to the specific conversation/node
-    // For example:
-    // - If activity has conversationId, scroll to that conversation
-    // - If activity has nodeId, highlight that node
-    // - If activity has coordinates, pan the canvas to that location
   };
 
   const toggleActivityPanel = () => {
     setShowActivityPanel(!showActivityPanel);
   };
 
-
-  const handleUserSelect = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
-    setCurrentUser(user);
-    setShowLandingPage(false);
-    setShowCreatePage(true);
-    // The store will be updated via the useEffect above
-  };
-
   const handleUserChange = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
     setCurrentUser(user);
-    // Update the store with the current user
     conversationStore.setCurrentUser({
       userId: user.userId,
       userName: user.userName,
@@ -69,45 +77,48 @@ const AppContent = observer(() => {
   };
 
   const handleCanvasRefresh = () => {
-    if (conversationStore.canvas?.id) {
-      conversationStore.loadCanvas(conversationStore.canvas.id);
+    if (id) {
+      conversationStore.loadCanvas(id);
     }
   };
 
-  const handleProjectSelect = (projectId: string) => {
-    setSelectedProjectId(projectId);
-    setShowCreatePage(false);
-    // Load the specific canvas
-    conversationStore.loadCanvas(projectId);
-  };
-
-  const handleBackToLanding = () => {
-    setCurrentUser(null);
-    setShowLandingPage(true);
-    setShowCreatePage(false);
-    setSelectedProjectId(null);
-  };
-
   const handleBackToProjects = () => {
-    setShowCreatePage(true);
-    setSelectedProjectId(null);
+    navigate('/');
   };
 
-  // Show landing page if no user is selected
-  if (showLandingPage || !currentUser) {
-    return <LandingPage onUserSelect={handleUserSelect} />;
-  }
-
-  // Show create page if user is selected but no project is chosen
-  if (showCreatePage && !selectedProjectId) {
+  if (isLoading) {
     return (
-      <CreatePage
-        currentUser={currentUser}
-        onProjectSelect={handleProjectSelect}
-        onBackToLanding={handleBackToLanding}
-      />
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-white text-xl">Loading canvas...</div>
+      </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-center">
+          <div className="text-red-400 text-xl mb-4">{error}</div>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go Back Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-white text-xl">Setting up user...</div>
+      </div>
+    );
+  }
+
+  const canvasId = conversationStore.canvas?.id;
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -146,6 +157,68 @@ const AppContent = observer(() => {
         )}
       </div>
     </div>
+  );
+});
+
+// Home route component (landing/create pages)
+const HomeRoute = observer(() => {
+  const navigate = useNavigate();
+  const { conversationStore } = useStores();
+  const [currentUser, setCurrentUser] = useState<{ userId: string; userName: string; userEmail: string; color: string } | null>(null);
+  const [showLandingPage, setShowLandingPage] = useState(true);
+  const [showCreatePage, setShowCreatePage] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      conversationStore.setCurrentUser({
+        userId: currentUser.userId,
+        userName: currentUser.userName,
+        userEmail: currentUser.userEmail,
+      });
+    }
+  }, [currentUser?.userId, currentUser?.userName, currentUser?.userEmail, conversationStore]);
+
+  const handleUserSelect = (user: { userId: string; userName: string; userEmail: string; color: string }) => {
+    setCurrentUser(user);
+    setShowLandingPage(false);
+    setShowCreatePage(true);
+  };
+
+  const handleProjectSelect = (projectId: string) => {
+    // Navigate to the canvas route
+    navigate(`/canvas/${projectId}`);
+  };
+
+  const handleBackToLanding = () => {
+    setCurrentUser(null);
+    setShowLandingPage(true);
+    setShowCreatePage(false);
+  };
+
+  if (showLandingPage || !currentUser) {
+    return <LandingPage onUserSelect={handleUserSelect} />;
+  }
+
+  if (showCreatePage) {
+    return (
+      <CreatePage
+        currentUser={currentUser}
+        onProjectSelect={handleProjectSelect}
+        onBackToLanding={handleBackToLanding}
+      />
+    );
+  }
+
+  return null;
+});
+
+// Main app content with routes
+const AppContent = observer(() => {
+  return (
+    <Routes>
+      <Route path="/" element={<HomeRoute />} />
+      <Route path="/canvas/:id" element={<CanvasRoute />} />
+    </Routes>
   );
 });
 
